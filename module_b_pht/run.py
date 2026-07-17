@@ -1,11 +1,10 @@
 """
-Módulo B — Reactivo: Hoeffding Adaptive Tree + Page-Hinkley Test (PHT)
+Module B — Reactive: Hoeffding Adaptive Tree + Page-Hinkley Test (PHT)
 
-El detector PHT monitoriza la señal de error. Cuando detecta un drift, el
-modelo "despierta" y reentrena (learn_one) durante una ventana de
-TRAIN_WINDOW muestras antes de volver a congelarse. Es la referencia
-reactiva sin generación sintética, frente a la que se compara la propuesta
-del módulo C.
+The PHT detector monitors the error signal. When it detects a drift, the
+model "wakes up" and retrains (learn_one) during a window of
+TRAIN_WINDOW samples before freezing again. It is the reactive reference
+without synthetic generation, against which the proposal of module C is compared.
 """
 
 import time
@@ -34,7 +33,7 @@ from common.streaming import stream_csv
 
 def run():
     print("=" * 70)
-    print("  MÓDULO B: Reactivo — Hoeffding Adaptive Tree + PHT")
+    print("  MODULE B: Reactive — Hoeffding Adaptive Tree + PHT")
     print("=" * 70)
 
     model = tree.HoeffdingAdaptiveTreeClassifier(grace_period=GRACE_PERIOD, seed=SEED)
@@ -51,48 +50,48 @@ def run():
 
     stream = stream_csv(CSV_PATH, start_row=START_ROW, max_rows=MAX_SAMPLES)
 
-    # ── Pre-entrenamiento ──
-    print(f"\n🔄 Pre-entrenando con {N_PRETRAIN:,} muestras...")
+    # ── Pre-training ──
+    print(f"\n🔄 Pre-training with {N_PRETRAIN:,} samples...")
     for x, y, y_raw in stream:
         model.learn_one(x, y)
         label_dist[y_raw] += 1
         n_processed += 1
         if n_processed >= N_PRETRAIN:
             break
-    print(f"✅ Pre-entrenamiento completado ({n_processed:,} muestras)")
+    print(f"✅ Pre-training completed ({n_processed:,} samples)")
 
-    # ── Evaluación prequential con PHT ──
-    print("\n🔍 Evaluando modelo reactivo con PHT...")
+    # ── Prequential evaluation with PHT ──
+    print("\n🔍 Evaluating reactive model with PHT...")
     training_enabled = False
     samples_to_train = 0
     for x, y, y_raw in stream:
         n_processed += 1
         label_dist[y_raw] += 1
 
-        # 1) Predecir
+        # 1) Predict
         t0 = time.perf_counter()
         y_pred = model.predict_one(x)
         if y_pred is None:
             y_pred = "BENIGN"
 
-        # 2) Actualizar métricas
+        # 2) Update metrics
         f1.update(y, y_pred)
         acc.update(y, y_pred)
 
-        # 3) PHT monitoriza el error
+        # 3) PHT monitors the error
         error = 0 if y_pred == y else 1
         pht.update(error)
 
-        # 4) Detección de drift
+        # 4) Drift detection
         if pht.drift_detected:
             n_drifts += 1
             training_enabled = True
             samples_to_train = TRAIN_WINDOW
             drift_points.append(n_processed)
             if n_drifts <= 30:
-                print(f"  ⚠️  DRIFT detectado en muestra {n_processed:,} (total: {n_drifts})")
+                print(f"  ⚠️  DRIFT detected at sample {n_processed:,} (total: {n_drifts})")
 
-        # 5) Aprender si se ha detectado drift
+        # 5) Learn if drift has been detected
         if training_enabled:
             model.learn_one(x, y)
             samples_to_train -= 1
@@ -115,9 +114,9 @@ def run():
                 f"Drifts={n_drifts} | {status}"
             )
 
-    print(f"\n✅ Módulo B completado — {n_processed:,} muestras procesadas")
-    print(f"   Accuracy final: {acc.get():.4f}")
-    print(f"   F1 rolling final: {f1.get():.4f}")
+    print(f"\n✅ Module B completed — {n_processed:,} samples processed")
+    print(f"   Final accuracy: {acc.get():.4f}")
+    print(f"   Final rolling F1: {f1.get():.4f}")
     print(f"   Total drifts: {n_drifts}")
 
     RESULTS_DIR.mkdir(exist_ok=True)
@@ -131,7 +130,7 @@ def run():
         drift_points=drift_points,
         n_pretrain=N_PRETRAIN,
     )
-    print(f"✅ Resultados guardados en {out_path}")
+    print(f"✅ Results saved to {out_path}")
 
 
 if __name__ == "__main__":

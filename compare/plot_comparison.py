@@ -1,8 +1,8 @@
 """
-Comparativa Módulo A (baseline) vs Módulo B (PHT) vs Módulo C (propuesta: PHT + DriftGAN).
+Comparison of Module A (baseline) vs Module B (PHT) vs Module C (proposal: PHT + DriftGAN).
 
-Requiere haber ejecutado antes module_a_baseline/run.py, module_b_pht/run.py
-y module_c_gan/run.py (cada uno guarda su resultado en results/module_*.npz).
+Requires running module_a_baseline/run.py, module_b_pht/run.py
+and module_c_gan/run.py beforehand (each saves its result in results/module_*.npz).
 """
 
 import numpy as np
@@ -19,42 +19,42 @@ def run():
     n_pretrain = int(data_a["n_pretrain"])
     drift_points_b = data_b["drift_points"]
 
-    fig, axes = new_three_panel_figure("Concept Drift PoC — Comparativa Módulos A, B y C")
+    fig, axes = new_three_panel_figure("Concept Drift PoC — Comparison Modules A, B and C")
     ax1, ax2, ax3 = axes
 
     series = [
-        (data_a, "#e74c3c", "Módulo A — Baseline (Estático)"),
-        (data_b, "#2ecc71", "Módulo B — Reactivo (PHT)"),
-        (data_c, "#8e44ad", "Módulo C — Propuesta (PHT + DriftGAN)"),
+        (data_a, "#e74c3c", "Module A — Baseline (Static)"),
+        (data_b, "#2ecc71", "Module B — Reactive (PHT)"),
+        (data_c, "#8e44ad", "Module C — Proposal (PHT + DriftGAN)"),
     ]
 
     for data, color, label in series:
         ax1.plot(data["snap_x"], data["snap_f1"], color=color, linewidth=1.5, alpha=0.85, label=label)
     for i, dp in enumerate(drift_points_b[:20]):
         ax1.axvline(x=dp, color="#f39c12", alpha=0.35, linewidth=1.0, linestyle="--",
-                    label="Drift detectado" if i == 0 else None)
+                    label="Drift detected" if i == 0 else None)
     ax1.axvline(x=n_pretrain, color="#3498db", alpha=0.6, linewidth=1.5, linestyle=":",
-                label="Fin pre-entrenamiento")
-    ax1.set_ylabel("F1 Score (ventana deslizante)")
-    ax1.set_title("Evolución del F1-Score (Ventana = 5,000)")
+                label="End of pre-training")
+    ax1.set_ylabel("F1 Score (sliding window)")
+    ax1.set_title("Evolution of F1-Score (Window = 5,000)")
     ax1.legend(loc="lower right", framealpha=0.9)
     ax1.set_ylim(-0.05, 1.05)
 
     for data, color, label in series:
         ax2.plot(data["snap_x"], data["snap_acc"], color=color, linewidth=1.5, alpha=0.85, label=label)
     ax2.axvline(x=n_pretrain, color="#3498db", alpha=0.6, linewidth=1.5, linestyle=":",
-                label="Fin pre-entrenamiento")
-    ax2.set_xlabel("Nº de muestras totales (acumulativo)")
-    ax2.set_ylabel("Accuracy (acumulativa)")
-    ax2.set_title("Evolución de la Accuracy a lo largo del Stream")
+                label="End of pre-training")
+    ax2.set_xlabel("Number of total samples (cumulative)")
+    ax2.set_ylabel("Accuracy (cumulative)")
+    ax2.set_title("Evolution of Accuracy throughout the Stream")
     ax2.legend(loc="lower right", framealpha=0.9)
     ax2.set_ylim(0.5, 1.02)
 
     for data, color, label in series:
         ax3.plot(data["snap_x"], data["snap_time"], color=color, lw=1.5, alpha=0.85, label=label)
-    ax3.axvline(x=n_pretrain, color="#3498db", alpha=0.6, lw=1.5, ls=":", label="Fin pre-train")
-    ax3.set_xlabel("Muestras")
-    ax3.set_ylabel("Tiempo de CPU (ms / 500 obj)")
+    ax3.axvline(x=n_pretrain, color="#3498db", alpha=0.6, lw=1.5, ls=":", label="End of pre-train")
+    ax3.set_xlabel("Samples")
+    ax3.set_ylabel("CPU Time (ms / 500 obj)")
     ax3.legend(loc="upper right")
 
     finalize_and_save(fig, axes, RESULTS_DIR / "comparison.png")

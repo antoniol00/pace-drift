@@ -1,10 +1,10 @@
 """
-Módulo C — Propuesta: Hoeffding Adaptive Tree + PHT + DriftGAN
+Module C — Proposal: Hoeffding Adaptive Tree + PHT + DriftGAN
 
-Igual que el módulo B, pero al detectar un drift entrena una DriftGAN con el
-buffer reciente de muestras de ataque y usa las variaciones sintéticas
-generadas para reforzar el reentrenamiento del árbol antes/junto con las
-muestras reales de la ventana de adaptación.
+Same as module B, but when a drift is detected it trains a DriftGAN with the
+recent buffer of attack samples and uses the generated synthetic variations
+to reinforce the retraining of the tree before/along with the
+real samples of the adaptation window.
 """
 
 import time
@@ -40,7 +40,7 @@ MIN_ATTACK_SAMPLES_FOR_GAN = 5
 
 def run():
     print("=" * 70)
-    print("  MÓDULO C: Propuesta — Hoeffding Adaptive Tree + PHT + DriftGAN")
+    print("  MODULE C: Proposal — Hoeffding Adaptive Tree + PHT + DriftGAN")
     print("=" * 70)
 
     model = tree.HoeffdingAdaptiveTreeClassifier(grace_period=GRACE_PERIOD, seed=SEED)
@@ -57,18 +57,18 @@ def run():
 
     stream = stream_csv(CSV_PATH, start_row=START_ROW, max_rows=MAX_SAMPLES)
 
-    # ── Pre-entrenamiento ──
-    print(f"\n🔄 Pre-entrenando con {N_PRETRAIN:,} muestras...")
+    # ── Pre-training ──
+    print(f"\n🔄 Pre-training with {N_PRETRAIN:,} samples...")
     for x, y, y_raw in stream:
         model.learn_one(x, y)
         label_dist[y_raw] += 1
         n_processed += 1
         if n_processed >= N_PRETRAIN:
             break
-    print(f"✅ Pre-entrenamiento completado ({n_processed:,} muestras)")
+    print(f"✅ Pre-training completed ({n_processed:,} samples)")
 
-    # ── Evaluación prequential con PHT y DriftGAN ──
-    print("\n🔍 Evaluando modelo reactivo con PHT y DriftGAN...")
+    # ── Prequential evaluation with PHT and DriftGAN ──
+    print("\n🔍 Evaluating reactive model with PHT and DriftGAN...")
     training_enabled = False
     samples_to_train = 0
     recent_buffer = deque(maxlen=RECENT_BUFFER_SIZE)
@@ -97,7 +97,7 @@ def run():
             samples_to_train = TRAIN_WINDOW
             drift_points.append(n_processed)
 
-            # ── Generación temprana de muestras sintéticas con DriftGAN ──
+            # ── Early generation of synthetic samples with DriftGAN ──
             attack_samples = [item[0] for item in recent_buffer if item[1] == "ATTACK"]
             num_syn = 0
             if len(attack_samples) >= MIN_ATTACK_SAMPLES_FOR_GAN:
@@ -109,14 +109,14 @@ def run():
                 )
                 num_syn = len(synthetic_attacks)
 
-                # Reentrenar el modelo inmediatamente con las variaciones sintéticas
+                # Retrain the model immediately with the synthetic variations
                 for syn_x in synthetic_attacks:
                     model.learn_one(syn_x, "ATTACK")
 
             if n_drifts <= 30:
                 print(
-                    f"  ⚠️  DRIFT {n_drifts} detectado en muestra {n_processed:,} -> "
-                    f"GAN generó {num_syn} variaciones sintéticas"
+                    f"  ⚠️  DRIFT {n_drifts} detected at sample {n_processed:,} -> "
+                    f"GAN generated {num_syn} synthetic variations"
                 )
 
         if training_enabled:
@@ -141,9 +141,9 @@ def run():
                 f"Drifts={n_drifts} | {status}"
             )
 
-    print(f"\n✅ Módulo C completado — {n_processed:,} muestras procesadas")
-    print(f"   Accuracy final: {acc.get():.4f}")
-    print(f"   F1 rolling final: {f1.get():.4f}")
+    print(f"\n✅ Module C completed — {n_processed:,} samples processed")
+    print(f"   Final accuracy: {acc.get():.4f}")
+    print(f"   Final rolling F1: {f1.get():.4f}")
     print(f"   Total drifts: {n_drifts}")
 
     RESULTS_DIR.mkdir(exist_ok=True)
@@ -157,7 +157,7 @@ def run():
         drift_points=drift_points,
         n_pretrain=N_PRETRAIN,
     )
-    print(f"✅ Resultados guardados en {out_path}")
+    print(f"✅ Results saved to {out_path}")
 
 
 if __name__ == "__main__":

@@ -1,9 +1,9 @@
 """
-Módulo A — Baseline: Modelo Estático (Hoeffding Adaptive Tree)
+Module A — Baseline: Static Model (Hoeffding Adaptive Tree)
 
-Se pre-entrena una única vez y después solo predice (sin actualización)
-durante el resto del stream. Sirve de referencia inferior para medir cuánto
-degrada el rendimiento un modelo "congelado" ante concept drift.
+It is pre-trained once and then only predicts (without updating)
+during the rest of the stream. It serves as a lower bound to measure how much
+the performance of a "frozen" model degrades under concept drift.
 """
 
 import time
@@ -30,7 +30,7 @@ from common.streaming import stream_csv
 
 def run():
     print("=" * 70)
-    print("  MÓDULO A: Baseline — Modelo Estático (Hoeffding Adaptive Tree)")
+    print("  MODULE A: Baseline — Static Model (Hoeffding Adaptive Tree)")
     print("=" * 70)
 
     model = tree.HoeffdingAdaptiveTreeClassifier(grace_period=GRACE_PERIOD, seed=SEED)
@@ -44,19 +44,19 @@ def run():
 
     stream = stream_csv(CSV_PATH, start_row=START_ROW, max_rows=MAX_SAMPLES)
 
-    # ── Pre-entrenamiento ──
-    print(f"\n🔄 Pre-entrenando con {N_PRETRAIN:,} muestras...")
+    # ── Pre-training ──
+    print(f"\n🔄 Pre-training with {N_PRETRAIN:,} samples...")
     for x, y, y_raw in stream:
         model.learn_one(x, y)
         label_dist[y_raw] += 1
         n_processed += 1
         if n_processed >= N_PRETRAIN:
             break
-    print(f"✅ Pre-entrenamiento completado ({n_processed:,} muestras)")
-    print(f"   Distribución inicial: {dict(label_dist)}")
+    print(f"✅ Pre-training completed ({n_processed:,} samples)")
+    print(f"   Initial distribution: {dict(label_dist)}")
 
-    # ── Evaluación prequential (Test-Only) ──
-    print("\n🔍 Evaluando modelo estático (Test-Only)...")
+    # ── Prequential evaluation (Test-Only) ──
+    print("\n🔍 Evaluating static model (Test-Only)...")
     for x, y, y_raw in stream:
         n_processed += 1
         label_dist[y_raw] += 1
@@ -83,9 +83,9 @@ def run():
                 f"Dist: {dict(label_dist)}"
             )
 
-    print(f"\n✅ Módulo A completado — {n_processed:,} muestras procesadas")
-    print(f"   Accuracy final: {acc.get():.4f}")
-    print(f"   F1 rolling final: {f1.get():.4f}")
+    print(f"\n✅ Module A completed — {n_processed:,} samples processed")
+    print(f"   Final accuracy: {acc.get():.4f}")
+    print(f"   Final rolling F1: {f1.get():.4f}")
 
     RESULTS_DIR.mkdir(exist_ok=True)
     out_path = RESULTS_DIR / "module_a.npz"
@@ -97,7 +97,7 @@ def run():
         snap_time=snap_time,
         n_pretrain=N_PRETRAIN,
     )
-    print(f"✅ Resultados guardados en {out_path}")
+    print(f"✅ Results saved to {out_path}")
 
 
 if __name__ == "__main__":

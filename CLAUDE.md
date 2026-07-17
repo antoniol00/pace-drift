@@ -60,5 +60,5 @@ results/            output dir for .npz snapshots and .png plots (gitignored exc
 
 ## Conventions
 
-- Narrative text (print statements, plot labels, docstrings) is in Spanish; keep new content consistent with this.
+- Narrative text (print statements, plot labels, docstrings) is in English; keep new content consistent with this.
 - All tunable experiment parameters live in `common/config.py` — avoid hardcoding constants inside module `run.py` files.

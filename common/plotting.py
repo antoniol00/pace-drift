@@ -1,4 +1,4 @@
-"""Helpers de estilo compartidos por los scripts de visualización de cada módulo."""
+"""Style helpers shared by the visualization scripts of each module."""
 
 import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
@@ -17,7 +17,7 @@ PLOT_STYLE = {
 
 
 def new_three_panel_figure(title: str):
-    """Crea la figura de 3 paneles (F1 / Accuracy / Tiempo de CPU) compartida por todos los módulos."""
+    """Creates the 3-panel figure (F1 / Accuracy / CPU Time) shared by all modules."""
     plt.rcParams.update(PLOT_STYLE)
     fig, axes = plt.subplots(3, 1, figsize=(14, 13), sharex=True)
     fig.suptitle(title, fontsize=16, fontweight="bold", y=0.98)
@@ -32,4 +32,4 @@ def finalize_and_save(fig, axes, save_path):
     plt.tight_layout(rect=[0, 0, 1, 0.96])
     fig.savefig(save_path, bbox_inches="tight", facecolor="white")
     plt.show()
-    print(f"\n✅ Gráfica guardada en {save_path}")
+    print(f"\n✅ Plot saved to {save_path}")

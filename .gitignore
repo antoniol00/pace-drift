@@ -2,6 +2,6 @@
 __pycache__/
 *.pyc
 
-# Artefactos regenerables de los módulos (npz/png); solo se versiona .gitkeep
+# Regenerable artifacts from the modules (npz/png); only .gitkeep is versioned
 results/*
 !results/.gitkeep

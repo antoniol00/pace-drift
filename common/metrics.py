@@ -1,10 +1,10 @@
-"""Métricas online usadas por los tres módulos."""
+"""Online metrics used by all three modules."""
 
 from collections import deque
 
 
 class RollingF1:
-    """Calcula F1 binario sobre las últimas W predicciones."""
+    """Calculates binary F1 over the last W predictions."""
 
     def __init__(self, window_size=5000, pos_label="ATTACK"):
         self.window = deque(maxlen=window_size)
