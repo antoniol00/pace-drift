@@ -4,61 +4,42 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-A concept-drift research project for network intrusion detection on the CIC-IDS2017 dataset. The core research goal is a **novel approach to improve drift detection/adaptation using GANs applied early**, generating synthetic samples of a new attack type from only a handful of real examples right when drift is detected — rather than waiting for enough real samples to accumulate before retraining. Modules A and B are baselines that the proposal (Module C) is measured against.
+A concept-drift research project for network intrusion detection on CIC-IDS2017. The research goal is a novel use of GANs to improve drift *adaptation and early detection*: generating synthetic samples of a new attack from the handful of real examples available at drift time (phases C/C_cond), and testing whether a generative monitor can anticipate drift before classification error rises (phase C_early). Phases A (frozen), B (reactive PHT) and C_prime (bootstrap+jitter) are the controls the proposals are measured against. See README.md for the full picture and docs/methodology.md for protocol details.
 
-- **Module A** (`module_a_baseline/`) — Static HAT model: pre-trained once, then frozen (predict-only). Lower-bound baseline.
-- **Module B** (`module_b_pht/`) — Reactive HAT model: `river.drift.PageHinkley` (PHT) detects drift and triggers a rolling retraining window. Standard reactive baseline, no synthetic data.
-- **Module C** (`module_c_gan/`) — **The proposal.** Same PHT-based detection as Module B, but at each detected drift, a lightweight `DriftGAN` (PyTorch GAN) trains on the small buffer of recent real attack samples and generates synthetic variations, which are fed into the tree via `learn_one` immediately, on top of the normal retraining window. This is the module future work should focus on strengthening.
+## Environment and commands
 
-All three run prequential (test-then-train) evaluation over the same streamed CSV using `river` for online ML and PyTorch for the GAN, and are directly comparable via `compare/plot_comparison.py`.
-
-## Running
-
-There is no venv/requirements-installed environment inside this repo. The Python environment lives outside the project at `/mnt/AI-DATA-SSD/alara/main_env` (pinned versions match `requirements.txt`). Use it to run anything here:
+The project uses **uv** with its own `.venv` (do not use the shared `/mnt/AI-DATA-SSD/alara/main_env` for this repo). `uv` is at `~/.local/bin/uv` — export `PATH="$HOME/.local/bin:$PATH"` if it's not found.
 
 ```bash
-/mnt/AI-DATA-SSD/alara/main_env/bin/python3 -m module_a_baseline.run
-/mnt/AI-DATA-SSD/alara/main_env/bin/python3 -m module_b_pht.run
-/mnt/AI-DATA-SSD/alara/main_env/bin/python3 -m module_c_gan.run
-/mnt/AI-DATA-SSD/alara/main_env/bin/python3 -m module_c_gan.visualize      # standalone plot for module C
-/mnt/AI-DATA-SSD/alara/main_env/bin/python3 -m compare.plot_comparison    # A vs B vs C, run after all three above
+make setup        # uv sync --dev
+make test         # pytest (fast: unit + synthetic-stream e2e, no real CSV needed)
+make lint         # ruff check
+make typecheck    # mypy (must stay clean)
+make smoke        # 10K-sample run against the real CSV
+uv run pytest tests/test_recovery.py            # single test file
+uv run python run_experiment.py --phase C --seeds 0,1 --n-jobs 2 --max-samples 100000
+make schedule && make run-all SEEDS=0,1,2,3,4   # full experiment (hours)
+make report       # aggregate tables + figures into results/report/
 ```
 
-The system `python3` does **not** have `river` installed. Modules must be run with `-m` (or with the repo root on `PYTHONPATH`) since they import each other via absolute package paths (`common.*`, `module_c_gan.drift_gan`).
+`--max-samples` below `n_pretrain` auto-shrinks pretraining (see `_fit_pretrain` in run_experiment.py).
 
-Each `run.py` prints progress to stdout and writes its snapshot metrics to `results/module_{a,b,c}.npz` (rolling F1, cumulative accuracy, per-interval CPU time, and — for B/C — drift sample indices). These `.npz`/`.png` outputs in `results/` are regenerable build artifacts and are gitignored (only `results/.gitkeep` is tracked) — run the modules to reproduce them rather than expecting them to be present after a fresh clone.
+## Architecture (src/driftgan/)
 
-## Repo structure
+One prequential engine runs every phase: `experiments/runner.py:run_phase` differs per phase only in **trigger** (none / PHT / shared schedule / dual recon+class PHT) and **augmenter** (none / vanilla GAN / jitter / conditional WGAN-GP). When adding a phase or strategy, extend `_make_augmenter` and the trigger selection there — do not fork the loop.
 
-```
-common/             shared config, data streaming, metrics, and plot styling used by all three modules
-  config.py          all tunable constants (dataset path, stream offsets, HAT/PHT hyperparams, snapshot intervals)
-  streaming.py        preprocess_row() + stream_csv(): reads the CSV row-by-row as a generator (file is ~1.5GB, never loaded fully)
-  metrics.py           RollingF1: binary F1 over a sliding window of predictions
-  plotting.py           shared 3-panel (F1 / Accuracy / CPU time) matplotlib figure helpers
-module_a_baseline/  Module A: static model
-module_b_pht/       Module B: reactive PHT baseline
-module_c_gan/       Module C: the proposal
-  drift_gan.py         the DriftGAN class itself (generator/discriminator, train_and_generate())
-  run.py                the PHT + DriftGAN evaluation loop
-  visualize.py           standalone plot for this module's results
-compare/            plot_comparison.py loads all three results/module_*.npz and plots them together
-results/            output dir for .npz snapshots and .png plots (gitignored except .gitkeep)
-```
+Load-bearing design decisions (details in docs/methodology.md):
 
-**Editing workflow**: `common/` holds anything shared verbatim across modules (data loading, config constants, the rolling-F1 metric, plot styling) — if you're about to copy-paste logic between `module_a_baseline`, `module_b_pht`, and `module_c_gan`, put it in `common/` instead. Module-specific logic (the retraining-window state machine, the DriftGAN integration) stays local to each module's `run.py`.
-
-## Core experiment mechanics (shared across all three modules)
-
-- **Data source**: `/mnt/AI-DATA-SSD/alara/Data/CIC-IDS2017.csv` (external to this repo), streamed row-by-row via `common.streaming.stream_csv`.
-- **Label binarization**: multiclass `Attack Type` is collapsed to binary `BENIGN` vs `ATTACK` in `preprocess_row`.
-- **Stream offset**: reading starts at `START_ROW = 540_000` (`common/config.py`) to skip the long initial all-benign block, so the first ~40K streamed rows are benign (for pre-training) before attack traffic — and thus drift — appears.
-- **Pre-training**: first `N_PRETRAIN = 50_000` streamed rows are used for `learn_one` calls with no evaluation; prequential evaluation (predict-then-optionally-learn) starts after that point.
-- **Drift detection** (Modules B & C): `river.drift.PageHinkley(delta=0.002)` monitors the 0/1 prediction-error signal; on `drift_detected`, the model re-enters a training-enabled window of `TRAIN_WINDOW = 5000` samples.
-- **DriftGAN** (Module C only): on each drift, if there are ≥5 buffered `ATTACK` samples in a `deque(maxlen=500)`, a small GAN (single-hidden-layer generator/discriminator, `noise_dim=16`) trains for `epochs=30` on those samples and generates 200 synthetic attack samples, immediately fed into the tree via `learn_one` before the normal retraining window kicks in. This is the mechanism to iterate on when strengthening the proposal (e.g. buffer size, GAN capacity/epochs, number of synthetic samples, how synthetic samples are weighted vs. real ones).
-- **Metrics**: rolling F1 (`RollingF1`, binary, window=5000, positive label `ATTACK`) and cumulative `river.metrics.Accuracy`, snapshotted every `SNAP_INTERVAL = 500` samples along with per-interval wall-clock processing time (`time.perf_counter`).
+- **Shared drift schedule** (`drift/schedule.py`): scheduled phases replay identical adaptation indices from a pass-0 JSON, so per-event metrics can be paired across phases. A report-only PHT still runs for delay measurement. C_early is deliberately exempt (its claim is anticipation). A scheduled index the stream skips is dropped, never fired late.
+- **Recovery metrics** (`metrics/recovery.py`): snapshots carry a `valid` flag — windows with no positive true label have undefined F1 and are excluded from RT/AUD, not counted as failure. Overlapping drifts close the previous event as `no_recovery`. The unit tests encode the analytic semantics; change behavior only with matching test changes.
+- **Cost accounting** (`metrics/cost.py`): per-sample latency + named sections; augmenters self-report `t_train`/`t_generate` attributes which the runner credits via `tracker.add` — new augmenters must set both.
+- **Config** (`config.py`): every tunable lives in `ExperimentConfig`; YAMLs in `configs/` merge base.yaml ← phase yaml ← CLI overrides. Never hardcode experiment constants in modules.
+- Runs write `results/runs/<phase>/seed_<n>/` (manifest with git/CSV/config hashes, snapshots parquet, cost, trace) and `results/recovery/<phase>_<seed>.parquet`. `results/` is gitignored.
 
 ## Conventions
 
-- Narrative text (print statements, plot labels, docstrings) is in English; keep new content consistent with this.
-- All tunable experiment parameters live in `common/config.py` — avoid hardcoding constants inside module `run.py` files.
+- Everything in English. Structured JSON logging via `driftgan.logging` (no bare prints in library code; CLI prints are fine).
+- ruff + mypy must pass (`make lint typecheck`); type hints everywhere; NumPy-style docstrings on public functions.
+- Notebooks are analysis-only (load parquets); pipelines live in `src/`.
+- `module_a_baseline/`, `module_b_pht/`, `module_c_gan/`, `compare/`, `common/` are the **legacy PoC** kept temporarily for reference; new work goes in `src/driftgan/`. Do not extend the legacy modules.
+- The CIC-IDS2017 CSV lives outside the repo at `/mnt/AI-DATA-SSD/alara/Data/CIC-IDS2017.csv` (`configs/base.yaml:csv_path`).
