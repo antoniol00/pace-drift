@@ -1,0 +1,31 @@
+# Shared defaults for all phases. Phase YAMLs override selectively.
+csv_path: /mnt/AI-DATA-SSD/alara/Data/CIC-IDS2017.csv
+target_col: Attack Type
+drop_cols: ["Flow ID", "Source IP", "Destination IP", "Timestamp"]
+start_row: 540000
+n_pretrain: 50000
+max_samples: 2000000
+
+grace_period: 200
+
+pht_delta: 0.002
+train_window: 5000
+# drift_schedule: results/drift_schedule.json   # set via CLI or uncomment after pass 0
+
+buffer_size: 500
+min_attack_samples: 5
+n_synthetic: 200
+gan_noise_dim: 16
+gan_epochs: 30
+gan_lr: 0.005
+jitter_sigma_scale: 0.01
+device: cuda
+
+rolling_f1_window: 5000
+snap_interval: 500
+log_interval: 10000
+recovery_theta: 0.9
+recovery_k: 3
+recovery_horizon: 50000
+rss_sample_interval: 5000
+trace_enabled: true

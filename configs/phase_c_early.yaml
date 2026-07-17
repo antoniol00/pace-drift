@@ -1,0 +1,8 @@
+phase: C_early
+monitor_interval: 5000
+monitor_epochs: 5
+monitor_hidden: 32
+monitor_latent: 16
+recon_pht_delta: 0.005
+lead_horizon: 20000
+early_augment: false
