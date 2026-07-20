@@ -125,7 +125,6 @@ notebooks/               # 03_recovery_analysis, 05_early_detection (analysis on
 tests/                   # pytest: analytic recovery cases, schedule, stats, augment, e2e smoke
 run_experiment.py        # multi-seed CLI (also builds the schedule: --build-schedule)
 Makefile                 # setup / test / lint / smoke / schedule / run-* / report
-module_*_*/, common/     # legacy PoC modules (kept temporarily; superseded by src/)
 ```
 
 ## 11. Future work
