@@ -21,6 +21,12 @@ gan_lr: 0.005
 jitter_sigma_scale: 0.01
 device: cuda
 
+monitor_interval: 1000
+monitor_clip: 10.0
+recon_pht_delta: 0.005
+recon_pht_threshold: 2.0
+recon_pht_min_instances: 10
+
 rolling_f1_window: 5000
 snap_interval: 500
 log_interval: 10000

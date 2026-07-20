@@ -3,6 +3,7 @@
 import numpy as np
 import pytest
 
+from driftgan.augment.base import FeatureScaler
 from driftgan.augment.bootstrap_jitter import BootstrapJitterAugmenter
 from driftgan.augment.cgan import ConditionalGanAugmenter, _proportional_counts
 from driftgan.augment.vanilla_gan import VanillaGanAugmenter
@@ -97,3 +98,52 @@ def test_proportional_counts_largest_remainder():
 def test_small_buffer_returns_empty():
     aug = VanillaGanAugmenter(device="cpu")
     assert aug.fit_generate(make_buffer(n=1), 10) == []
+
+
+# ── feature scaling (fixes the scale-collapse that made C == C_cond) ──────────
+
+def test_feature_scaler_roundtrip():
+    rng = np.random.default_rng(0)
+    X = rng.normal(1e5, 1e4, (50, 6)).astype(np.float32)
+    sc = FeatureScaler.fit(X)
+    Xn = sc.transform(X)
+    assert abs(float(Xn.mean())) < 1e-2 and abs(float(Xn.std()) - 1.0) < 0.2
+    assert np.allclose(sc.inverse(Xn), X, rtol=1e-3, atol=1.0)
+
+
+def test_feature_scaler_handles_constant_feature():
+    X = np.column_stack([np.full(10, 7.0), np.arange(10.0)]).astype(np.float32)
+    sc = FeatureScaler.fit(X)
+    assert sc.sd[0] == 1.0  # constant feature -> unit scale, no div-by-zero
+    assert np.allclose(sc.inverse(sc.transform(X)), X, atol=1e-4)
+
+
+def make_large_scale_buffer(n=80, seed=0, label="DoS"):
+    """Buffer whose features span ~1 to ~1e6, like raw CICIDS2017 flows."""
+    rng = np.random.default_rng(seed)
+    keys = ["small", "mid", "huge"]
+    rows = np.column_stack([
+        rng.normal(1.0, 0.5, n),
+        rng.normal(1e3, 2e2, n),
+        rng.normal(1e6, 3e5, n),
+    ])
+    return [({k: float(v) for k, v in zip(keys, row, strict=True)}, label) for row in rows]
+
+
+@pytest.mark.parametrize(
+    "make_aug",
+    [
+        lambda: VanillaGanAugmenter(noise_dim=8, epochs=25, device="cpu", seed=0),
+        lambda: ConditionalGanAugmenter(noise_dim=8, epochs=25, n_critic=1, device="cpu", seed=0),
+    ],
+    ids=["vanilla", "cgan"],
+)
+def test_gan_recovers_feature_scale(make_aug):
+    buffer = make_large_scale_buffer()
+    real = np.array([s["huge"] for s, _ in buffer])
+    out = make_aug().fit_generate(buffer, 150)
+    gen = np.array([s["huge"] for s in out])
+    # Without normalization the generator collapsed to ~O(1) regardless of the
+    # 1e6-scale target; with it, samples are produced at the real scale.
+    assert abs(float(gen.mean())) > 1e4
+    assert float(gen.std()) > 0.02 * float(real.std())

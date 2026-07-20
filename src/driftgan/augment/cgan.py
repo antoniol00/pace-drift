@@ -21,7 +21,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 
-from driftgan.augment.base import Buffer, buffer_to_matrix, matrix_to_samples
+from driftgan.augment.base import Buffer, FeatureScaler, buffer_to_matrix, matrix_to_samples
 from driftgan.augment.vanilla_gan import resolve_device
 from driftgan.augment.wgan_gp import ConditionalCritic, ConditionalGenerator, gradient_penalty
 
@@ -95,10 +95,14 @@ class ConditionalGanAugmenter:
             return []
         t0 = time.perf_counter()
         X, keys, subtypes = buffer_to_matrix(buffer)
-        self._ensure_networks(keys, subtypes, X.shape[1])
+        # Standardize per buffer (see FeatureScaler): the critic and generator
+        # operate in a well-scaled space; samples are inverse-transformed back.
+        scaler = FeatureScaler.fit(X)
+        Xn = scaler.transform(X)
+        self._ensure_networks(keys, subtypes, Xn.shape[1])
         assert self._G is not None and self._D is not None
 
-        real = torch.tensor(X, dtype=torch.float32, device=self.device)
+        real = torch.tensor(Xn, dtype=torch.float32, device=self.device)
         y = torch.tensor([self.class_to_id[s] for s in subtypes], dtype=torch.long, device=self.device)
         batch = real.size(0)
 
@@ -125,7 +129,7 @@ class ConditionalGanAugmenter:
         self.t_generate = time.perf_counter() - t1
         if not out:
             return []
-        return matrix_to_samples(np.concatenate(out, axis=0), keys)
+        return matrix_to_samples(scaler.inverse(np.concatenate(out, axis=0)), keys)
 
     def _train_epoch_wgan(self, real: torch.Tensor, y: torch.Tensor, batch: int) -> None:
         assert self._G is not None and self._D is not None

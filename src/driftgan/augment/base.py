@@ -2,11 +2,44 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Protocol
 
 import numpy as np
 
 Buffer = list[tuple[dict[str, float], str]]  # [(features, raw subtype label), ...]
+
+
+@dataclass
+class FeatureScaler:
+    """Per-feature standardizer used to train generators in a well-scaled space.
+
+    CICIDS2017 features span many orders of magnitude (single features range
+    into the millions), which a small MLP generator cannot fit directly: it
+    collapses to near-origin output regardless of the target distribution.
+    Fitting the generator on standardized features and inverse-transforming
+    the samples back restores the real scale, so different generators produce
+    genuinely different — and realistic-scale — synthetic attacks.
+
+    Constant features (``sd == 0``) get ``sd = 1`` so the transform is a plain
+    mean-shift and the inverse is exact.
+    """
+
+    mu: np.ndarray
+    sd: np.ndarray
+
+    @classmethod
+    def fit(cls, X: np.ndarray) -> FeatureScaler:
+        mu = X.mean(axis=0)
+        sd = X.std(axis=0)
+        sd = np.where(sd < 1e-8, 1.0, sd).astype(np.float32)
+        return cls(mu.astype(np.float32), sd)
+
+    def transform(self, X: np.ndarray) -> np.ndarray:
+        return (X - self.mu) / self.sd
+
+    def inverse(self, X: np.ndarray) -> np.ndarray:
+        return X * self.sd + self.mu
 
 
 class Augmenter(Protocol):

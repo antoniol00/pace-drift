@@ -7,7 +7,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 
-from driftgan.augment.base import Buffer, buffer_to_matrix, matrix_to_samples
+from driftgan.augment.base import Buffer, FeatureScaler, buffer_to_matrix, matrix_to_samples
 
 
 def resolve_device(requested: str) -> torch.device:
@@ -63,12 +63,16 @@ class VanillaGanAugmenter:
             return []
         t0 = time.perf_counter()
         X, keys, _ = buffer_to_matrix(buffer)
+        # Standardize per buffer so the tiny generator can fit heavy-tailed,
+        # multi-scale features; samples are inverse-transformed before return.
+        scaler = FeatureScaler.fit(X)
+        Xn = scaler.transform(X)
         if self.generator is None or self._keys != keys:
-            self._build(input_dim=X.shape[1])
+            self._build(input_dim=Xn.shape[1])
             self._keys = keys
         assert self.generator is not None and self.discriminator is not None
 
-        real = torch.tensor(X, dtype=torch.float32, device=self.device)
+        real = torch.tensor(Xn, dtype=torch.float32, device=self.device)
         batch = real.size(0)
         ones = torch.ones(batch, 1, device=self.device)
         zeros = torch.zeros(batch, 1, device=self.device)
@@ -95,6 +99,6 @@ class VanillaGanAugmenter:
         with torch.no_grad():
             z = torch.randn(n, self.noise_dim, device=self.device)
             synthetic = self.generator(z).cpu().numpy()
-        samples = matrix_to_samples(synthetic, keys)
+        samples = matrix_to_samples(scaler.inverse(synthetic), keys)
         self.t_generate = time.perf_counter() - t1
         return samples

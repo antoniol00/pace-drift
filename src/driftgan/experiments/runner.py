@@ -157,12 +157,18 @@ def run_phase(
         else:
             trigger = DynamicPHTTrigger(delta=config.pht_delta)
     elif phase == "C_early":
-        dual = DualPHT(class_delta=config.pht_delta, recon_delta=config.recon_pht_delta)
+        dual = DualPHT(
+            class_delta=config.pht_delta,
+            recon_delta=config.recon_pht_delta,
+            recon_threshold=config.recon_pht_threshold,
+            recon_min_instances=config.recon_pht_min_instances,
+        )
         monitor = ReconstructionMonitor(
             check_interval=config.monitor_interval,
             hidden=config.monitor_hidden,
             latent=config.monitor_latent,
             epochs=config.monitor_epochs,
+            clip=config.monitor_clip,
             device=config.device,
             seed=seed,
         )

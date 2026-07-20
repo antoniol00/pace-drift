@@ -21,26 +21,37 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 
+from driftgan.augment.base import FeatureScaler
 from driftgan.augment.vanilla_gan import resolve_device
 
 
 class ReconstructionMonitor:
-    """Incrementally trained autoencoder over the recent feature buffer.
+    """Autoencoder over the recent feature buffer, as a leading drift signal.
 
-    Every ``check_interval`` observed samples, the AE is fine-tuned for
-    ``epochs`` epochs on the buffer and the mean reconstruction error over
-    the buffer is returned (otherwise ``observe`` returns None). The error
-    series is the input to ``PHT_recon``.
+    The coordinate system is fixed on the **first** check (a frozen reference
+    :class:`FeatureScaler`): standardizing every later buffer against its own
+    stats — as an earlier version did — cancels exactly the covariate shift
+    the monitor is meant to detect. With a frozen scaler, a distribution
+    change moves inputs away from the reference and the reconstruction error
+    rises.
+
+    Crucially, the error at each check is measured **before** the AE is
+    fine-tuned on that buffer, so a shift shows up as a spike before the model
+    absorbs it (a *leading* signal). After measuring, the AE is fine-tuned so
+    it tracks the new normal for subsequent drifts. Standardized inputs are
+    clipped to ``clip`` to stop a single heavy-tailed feature from dominating
+    the error. The error series is the input to ``PHT_recon``.
     """
 
     def __init__(
         self,
-        check_interval: int = 5_000,
+        check_interval: int = 1_000,
         buffer_size: int = 2_000,
         hidden: int = 32,
         latent: int = 16,
         epochs: int = 5,
         lr: float = 1e-3,
+        clip: float = 10.0,
         device: str = "cpu",
         seed: int = 0,
     ):
@@ -49,10 +60,12 @@ class ReconstructionMonitor:
         self.lr = lr
         self.hidden = hidden
         self.latent = latent
+        self.clip = clip
         self.device = resolve_device(device)
         self.seed = seed
         self._buffer: deque[np.ndarray] = deque(maxlen=buffer_size)
         self._keys: list[str] | None = None
+        self._scaler: FeatureScaler | None = None
         self._model: nn.Module | None = None
         self._opt: optim.Optimizer | None = None
         self._n_seen = 0
@@ -71,6 +84,25 @@ class ReconstructionMonitor:
         ).to(self.device)
         self._opt = optim.Adam(self._model.parameters(), lr=self.lr)
 
+    def _tensor(self, X: np.ndarray) -> torch.Tensor:
+        assert self._scaler is not None
+        Xn = np.clip(self._scaler.transform(X), -self.clip, self.clip)
+        return torch.tensor(Xn, dtype=torch.float32, device=self.device)
+
+    def _train(self, t: torch.Tensor) -> None:
+        assert self._model is not None and self._opt is not None
+        loss_fn = nn.MSELoss()
+        for _ in range(self.epochs):
+            self._opt.zero_grad()
+            loss = loss_fn(self._model(t), t)
+            loss.backward()
+            self._opt.step()
+
+    def _recon_error(self, t: torch.Tensor) -> float:
+        assert self._model is not None
+        with torch.no_grad():
+            return float(nn.MSELoss()(self._model(t), t).item())
+
     def observe(self, x: dict[str, float], index: int) -> float | None:
         """Feed one stream sample; returns the mean reconstruction error at
         check points, None otherwise."""
@@ -84,23 +116,16 @@ class ReconstructionMonitor:
 
     def _check(self, index: int) -> float:
         X = np.stack(self._buffer)
-        # Per-feature standardization with buffer stats keeps the error
-        # scale comparable across checks despite heavy-tailed features.
-        mu, sd = X.mean(axis=0), X.std(axis=0)
-        sd[sd == 0] = 1.0
-        Xn = (X - mu) / sd
-        t = torch.tensor(Xn, dtype=torch.float32, device=self.device)
-        if self._model is None:
+        if self._scaler is None:
+            # First check defines the frozen reference frame and baseline.
+            self._scaler = FeatureScaler.fit(X)
+            t = self._tensor(X)
             self._build(t.shape[1])
-        assert self._model is not None and self._opt is not None
-
-        loss_fn = nn.MSELoss()
-        for _ in range(self.epochs):
-            self._opt.zero_grad()
-            loss = loss_fn(self._model(t), t)
-            loss.backward()
-            self._opt.step()
-        with torch.no_grad():
-            err = float(loss_fn(self._model(t), t).item())
+            self._train(t)
+            err = self._recon_error(t)
+        else:
+            t = self._tensor(X)  # frozen scaler -> shift is visible
+            err = self._recon_error(t)  # measure before adapting (leading signal)
+            self._train(t)  # then track the new normal
         self.error_history.append((index, err))
         return err

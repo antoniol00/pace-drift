@@ -63,11 +63,14 @@ class ExperimentConfig:
     cgan_loss: str = "wgan_gp"  # "wgan_gp" | "bce" (ablation)
 
     # Early detection (C_early)
-    monitor_interval: int = 5_000
+    monitor_interval: int = 1_000  # recon-error sample cadence (finer -> more PHT updates)
     monitor_epochs: int = 5
     monitor_hidden: int = 32
     monitor_latent: int = 16
+    monitor_clip: float = 10.0  # clip standardized inputs to tame heavy-tailed features
     recon_pht_delta: float = 0.005
+    recon_pht_threshold: float = 2.0  # cumulative-sum threshold for PHT_recon
+    recon_pht_min_instances: int = 10  # warmup checks before PHT_recon can fire
     lead_horizon: int = 20_000  # max samples between PHT_recon and PHT_class fires to pair them
     early_augment: bool = False  # if True, C_early also augments like C on early fires
 

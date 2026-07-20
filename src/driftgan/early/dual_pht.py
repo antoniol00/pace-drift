@@ -18,9 +18,20 @@ class DualPHT:
     Fire indices of both are recorded for post-hoc lead-time analysis.
     """
 
-    def __init__(self, class_delta: float, recon_delta: float):
+    def __init__(
+        self,
+        class_delta: float,
+        recon_delta: float,
+        recon_threshold: float = 2.0,
+        recon_min_instances: int = 10,
+    ):
         self._pht_class = river_drift.PageHinkley(delta=class_delta)
-        self._pht_recon = river_drift.PageHinkley(delta=recon_delta)
+        # The recon signal is sampled sparsely (once per monitor check) and is
+        # O(1)-scaled, not 0/1, so it needs its own threshold and a shorter
+        # warmup than the per-sample class-error detector.
+        self._pht_recon = river_drift.PageHinkley(
+            delta=recon_delta, threshold=recon_threshold, min_instances=recon_min_instances
+        )
         self.class_fires: list[int] = []
         self.recon_fires: list[int] = []
 
