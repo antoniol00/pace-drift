@@ -1,8 +1,11 @@
 phase: C_early
-monitor_interval: 5000
+monitor_interval: 1000       # finer recon sampling -> more PHT resolution, earlier detection
 monitor_epochs: 5
 monitor_hidden: 32
 monitor_latent: 16
-recon_pht_delta: 0.005
+monitor_clip: 10.0
+recon_pht_delta: 0.0005      # calibrated on seed 0 / 300K (confirmed run: recall 0.6,
+recon_pht_threshold: 0.1     # ~16K-sample mean lead, up from 0.11 recall). Low threshold
+recon_pht_min_instances: 10  # is aggressive -> many recon fires; multi-seed run will test it.
 lead_horizon: 20000
 early_augment: false

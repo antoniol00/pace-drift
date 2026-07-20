@@ -319,6 +319,9 @@ def run_phase(
             "n_class_fires": report.n_class_fires,
             "recon_fires": dual.recon_fires,
             "class_fires": dual.class_fires,
+            # Full recon-error series (index, error) enables offline PHT_recon
+            # calibration without re-running the AE.
+            "recon_error_series": monitor.error_history if monitor is not None else [],
         }
 
     drift_indices = [e["index"] for e in drift_events]
