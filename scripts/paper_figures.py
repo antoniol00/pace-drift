@@ -1,12 +1,16 @@
 """Publication-quality figures for the DriftGAN full-run verdict.
 
-Builds three paper figures that tell the honest story:
-  fig1  F1 trajectory over the stream  -> A collapses, B/C overlap (GAN null),
-        C_early stays high (the win).
+Builds the paper figures that tell the honest story:
+  fig1  local F1 across the stream    -> A collapses, B/C overlap (GAN null),
+        C_early holds up in the drift-dense second half (the win).
   fig2  Realistic recovery comparison  -> final F1 per phase (with per-seed
         spread) + RT/AUD with 95% CI, showing GAN adaptation ~ reactive baseline.
   fig3  Early-detection evidence       -> lead-time distribution (anticipation)
         + cost/benefit (memory vs F1).
+  fig6  Frequency-control ablation     -> C_freq (same adaptation count as
+        C_early, blind periodic timing) falls below baseline B, proving the
+        gain is *when* it adapts, not *how often*.
+(fig4 resources and fig5 sensitivity live in scripts/reviewer_analysis.py.)
 
 Colours: Okabe-Ito (colour-blind safe by construction), one fixed hue per phase.
 Run:  uv run python scripts/paper_figures.py
@@ -22,7 +26,6 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from matplotlib.patches import Patch
 
 RUNS = Path("results/runs")
 REC = Path("results/recovery")
@@ -37,6 +40,7 @@ COLOR = {
     "C": "#E69F00",        # GAN vanilla  -> orange
     "C_cond": "#56B4E9",   # conditional WGAN-GP -> sky
     "C_prime": "#CC79A7",  # bootstrap+jitter -> purple (naive control)
+    "C_freq": "#D55E00",   # periodic-clock control -> vermillion
     "C_early": "#009E73",  # generative monitor -> green (the win)
 }
 LABEL = {
@@ -45,6 +49,7 @@ LABEL = {
     "C": "C · GAN",
     "C_cond": "C_cond · cond. WGAN-GP",
     "C_prime": "C' · bootstrap+jitter",
+    "C_freq": "C_freq · periodic ctrl",
     "C_early": "C_early · gen. monitor",
 }
 
@@ -187,7 +192,7 @@ def fig2_recovery(summ: pd.DataFrame) -> None:
 
     # -- right: RT & AUD with 95% CI (the honest 'GAN ~ baseline') ----------
     rec = ["B", "C", "C_cond", "C_prime"]  # PHT phases; C_early recovery is confounded
-    st = summ.groupby("phase")
+    summ.groupby("phase")
     # pull RT/AUD from recovery parquets (per-event), aggregate mean + bootstrap CI
     def agg(metric: str) -> tuple[list, list, list]:
         means, los, his = [], [], []
@@ -222,7 +227,7 @@ def fig2_recovery(summ: pd.DataFrame) -> None:
     axR.set_ylabel("recovery cost, samples  (95% CI)")
     axR.set_title("B. Recovery cost — RT (light) vs AUD (solid)")
     axR.set_ylim(0, max(aud_hi) * 1.28)
-    for xi, (rtm, audm) in enumerate(zip(rt_m, aud_m)):
+    for xi, (rtm, audm) in enumerate(zip(rt_m, aud_m, strict=False)):
         axR.annotate(f"{rtm:.0f}", (xi - w / 2, rtm), xytext=(0, 3),
                      textcoords="offset points", ha="center", fontsize=8)
         axR.annotate(f"{audm:.0f}", (xi + w / 2, audm), xytext=(0, 3),
@@ -302,11 +307,72 @@ def fig3_early(summ: pd.DataFrame) -> None:
     plt.close(fig)
 
 
+def _local_f1_by_segment(phase: str, edges: list[float]) -> tuple[list, list]:
+    """Mean valid-window F1 in each [edge, edge) band, pooled across seeds."""
+    rows = []
+    for s in SEEDS:
+        df = pd.read_parquet(RUNS / phase / f"seed_{s}" / "snapshots.parquet")
+        rows.append(df[df["valid"]][["index", "f1"]])
+    d = pd.concat(rows)
+    means, overall = [], d["f1"].mean()
+    for lo, hi in zip(edges[:-1], edges[1:], strict=False):
+        means.append(d[(d["index"] >= lo) & (d["index"] < hi)]["f1"].mean())
+    return means, overall
+
+
+def fig6_frequency_ablation() -> None:
+    """C_freq control: same adaptation count as C_early, blind periodic timing.
+
+    Answers 'C_early only wins because it retrains more often': at equal
+    frequency, blind timing is *worse than the reactive baseline*, so the gain
+    is about *when* it adapts, not *how often*.
+    """
+    edges = [0.5e6, 1.0e6, 1.5e6, 2.05e6]
+    seg_labels = ["0.5–1.0M\n(easy)", "1.0–1.5M\n(drift-dense)",
+                  "1.5–2.0M\n(drift-dense)"]
+    phases = ["B", "C_freq", "C_early"]
+    fig, (axL, axR) = plt.subplots(1, 2, figsize=(12, 4.8),
+                                   gridspec_kw={"width_ratios": [1.4, 1]})
+
+    seg = {p: _local_f1_by_segment(p, edges) for p in phases}
+    x = np.arange(len(seg_labels))
+    w = 0.26
+    for i, p in enumerate(phases):
+        axL.bar(x + (i - 1) * w, seg[p][0], w, color=COLOR[p],
+                edgecolor="white", label=LABEL[p])
+    axL.set_xticks(x)
+    axL.set_xticklabels(seg_labels, fontsize=9)
+    axL.set_ylabel("local F1 (mean valid window, 5 seeds)")
+    axL.set_title("A. Blind periodic adaptation collapses in the hard regions")
+    axL.set_ylim(0, 1.0)
+    axL.legend(loc="upper right")
+
+    overall = [seg[p][1] for p in phases]
+    axR.bar(np.arange(3), overall, width=0.6, color=[COLOR[p] for p in phases],
+            edgecolor="white")
+    for i, v in enumerate(overall):
+        axR.annotate(f"{v:.2f}", (i, v), xytext=(0, 3),
+                     textcoords="offset points", ha="center", fontweight="bold")
+    axR.set_xticks(np.arange(3))
+    axR.set_xticklabels(["B\nreactive", "C_freq\nsame freq,\nblind timing",
+                         "C_early\ninformed\ntiming"], fontsize=9)
+    axR.set_ylabel("overall local F1")
+    axR.set_title("B. Frequency is not the driver — timing is")
+    axR.set_ylim(0, 0.85)
+    axR.text(0.5, 0.86, "C_freq matches C_early's adaptation count (~162) but on a\n"
+             "blind clock → below baseline B. The gain is *when*, not *how often*.",
+             transform=axR.transAxes, ha="center", va="top", fontsize=8.5,
+             color="#555")
+    fig.savefig(OUT / "fig6_frequency_ablation.png")
+    plt.close(fig)
+
+
 def main() -> None:
     summ = load_summaries()
     fig1_trajectory()
     fig2_recovery(summ)
     fig3_early(summ)
+    fig6_frequency_ablation()
     print("wrote:")
     for p in sorted(OUT.glob("*.png")):
         print(" ", p)

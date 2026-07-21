@@ -15,7 +15,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 CONFIGS_DIR = REPO_ROOT / "configs"
 RESULTS_DIR = REPO_ROOT / "results"
 
-VALID_PHASES = ("A", "B", "C", "C_prime", "C_cond", "C_early")
+VALID_PHASES = ("A", "B", "C", "C_prime", "C_cond", "C_early", "C_freq")
 
 
 @dataclass
@@ -43,6 +43,11 @@ class ExperimentConfig:
     pht_delta: float = 0.002
     train_window: int = 5_000
     drift_schedule: str | None = None  # path to drift_schedule.json; overrides dynamic PHT
+    # Frequency-matched control (C_freq): adapt every N samples on a blind
+    # periodic clock instead of any drift signal. N is set so the total number
+    # of adaptations matches C_early's mean fire count, isolating adaptation
+    # *frequency* from adaptation *timing* (anticipation).
+    periodic_adapt_interval: int = 12_000
 
     # Augmentation (C, C_prime, C_cond)
     buffer_size: int = 500

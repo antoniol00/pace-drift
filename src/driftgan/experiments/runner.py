@@ -12,11 +12,14 @@ B          PHT / shared schedule        none
 C          PHT / shared schedule        VanillaGanAugmenter
 C_prime    PHT / shared schedule        BootstrapJitterAugmenter
 C_cond     PHT / shared schedule        ConditionalGanAugmenter
+C_freq     periodic clock (blind)       none
 C_early    DualPHT (recon + class)      optional (config.early_augment)
 =========  ==========================  ==============================
 
 C_early always runs dynamically: its contribution is *anticipation*, which
-a fixed schedule would erase (see docs/methodology.md).
+a fixed schedule would erase (see docs/methodology.md). C_freq is the
+frequency-matched control: it fires the same number of times as C_early but
+on a blind periodic clock, isolating adaptation frequency from timing.
 """
 
 from __future__ import annotations
@@ -36,7 +39,12 @@ from river import metrics as river_metrics
 from driftgan.augment.base import Buffer
 from driftgan.config import ExperimentConfig
 from driftgan.data.stream import ATTACK, BENIGN, stream_csv
-from driftgan.drift.schedule import DynamicPHTTrigger, ScheduledDriftTrigger, load_schedule
+from driftgan.drift.schedule import (
+    DynamicPHTTrigger,
+    PeriodicTrigger,
+    ScheduledDriftTrigger,
+    load_schedule,
+)
 from driftgan.early.dual_pht import DualPHT, match_lead_times
 from driftgan.early.reconstruction_monitor import ReconstructionMonitor
 from driftgan.experiments.manifest import build_manifest, save_manifest
@@ -146,7 +154,7 @@ def run_phase(
     tracker = CostTracker(rss_sample_interval=config.rss_sample_interval)
 
     # ── trigger selection ────────────────────────────────────────────
-    trigger: DynamicPHTTrigger | ScheduledDriftTrigger | None = None
+    trigger: DynamicPHTTrigger | ScheduledDriftTrigger | PeriodicTrigger | None = None
     dual: DualPHT | None = None
     monitor: ReconstructionMonitor | None = None
     if phase in ("B", "C", "C_prime", "C_cond"):
@@ -156,6 +164,10 @@ def run_phase(
             )
         else:
             trigger = DynamicPHTTrigger(delta=config.pht_delta)
+    elif phase == "C_freq":
+        trigger = PeriodicTrigger(
+            interval=config.periodic_adapt_interval, start_after=config.n_pretrain
+        )
     elif phase == "C_early":
         dual = DualPHT(
             class_delta=config.pht_delta,
@@ -250,7 +262,12 @@ def run_phase(
             fire_source = ""
             if trigger is not None:
                 fired = trigger.update(n_processed, error)
-                fire_source = "schedule" if isinstance(trigger, ScheduledDriftTrigger) else "pht"
+                if isinstance(trigger, ScheduledDriftTrigger):
+                    fire_source = "schedule"
+                elif isinstance(trigger, PeriodicTrigger):
+                    fire_source = "periodic"
+                else:
+                    fire_source = "pht"
             elif dual is not None:
                 if dual.update_class(n_processed, error):
                     fired = True

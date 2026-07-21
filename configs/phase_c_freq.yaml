@@ -1,0 +1,6 @@
+phase: C_freq
+# Frequency-matched control for C_early. Adapts on a blind periodic clock with
+# no drift signal. interval = 12000 over ~1.95M evaluated samples -> ~162
+# adaptations, matching C_early's mean fire count (142-171, mean ~161) from the
+# full 5-seed run. Isolates adaptation *frequency* from *timing* (anticipation).
+periodic_adapt_interval: 12000

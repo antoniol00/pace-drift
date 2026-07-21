@@ -1,12 +1,36 @@
 """Tests for shared drift schedules and triggers."""
 
+import pytest
+
 from driftgan.drift.schedule import (
     DriftSchedule,
     DynamicPHTTrigger,
+    PeriodicTrigger,
     ScheduledDriftTrigger,
     build_schedule_from_labels,
     load_schedule,
 )
+
+
+def test_periodic_trigger_fires_on_clock_after_warmup():
+    trig = PeriodicTrigger(interval=10, start_after=5)
+    fires = [i for i in range(46) if trig.update(i, error=0)]
+    # first fire at start_after + interval = 15, then every 10
+    assert fires == [15, 25, 35, 45]
+    assert trig.fired_indices == fires
+
+
+def test_periodic_trigger_ignores_error_signal():
+    a = PeriodicTrigger(interval=7)
+    b = PeriodicTrigger(interval=7)
+    fa = [i for i in range(30) if a.update(i, error=0)]
+    fb = [i for i in range(30) if b.update(i, error=1)]
+    assert fa == fb  # firing depends only on the clock, never the error
+
+
+def test_periodic_trigger_rejects_nonpositive_interval():
+    with pytest.raises(ValueError):
+        PeriodicTrigger(interval=0)
 
 
 def test_scheduled_trigger_fires_exactly_at_index():

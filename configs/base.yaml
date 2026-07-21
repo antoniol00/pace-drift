@@ -10,6 +10,7 @@ grace_period: 200
 
 pht_delta: 0.002
 train_window: 5000
+periodic_adapt_interval: 12000   # C_freq blind-clock cadence (~matches C_early fire count)
 # drift_schedule: results/drift_schedule.json   # set via CLI or uncomment after pass 0
 
 buffer_size: 500

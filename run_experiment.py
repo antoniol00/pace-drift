@@ -32,6 +32,7 @@ PHASE_CONFIG = {
     "C_prime": "phase_c_prime.yaml",
     "C_cond": "phase_c_cond.yaml",
     "C_early": "phase_c_early.yaml",
+    "C_freq": "phase_c_freq.yaml",
 }
 
 

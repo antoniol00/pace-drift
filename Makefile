@@ -43,7 +43,11 @@ run-C-cond:
 run-C-early:
 	uv run python run_experiment.py --phase C_early --seeds $(SEEDS) --n-jobs $(N_JOBS)
 
-run-all: schedule run-A run-B run-C run-C-prime run-C-cond run-C-early
+# C_freq: frequency-matched control for C_early (blind periodic clock, no schedule).
+run-C-freq:
+	uv run python run_experiment.py --phase C_freq --seeds $(SEEDS) --n-jobs $(N_JOBS)
+
+run-all: schedule run-A run-B run-C run-C-prime run-C-cond run-C-freq run-C-early
 
 report:
 	uv run python scripts/make_report.py

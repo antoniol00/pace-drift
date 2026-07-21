@@ -149,6 +149,32 @@ class DynamicPHTTrigger:
         return False
 
 
+class PeriodicTrigger:
+    """Adaptation trigger firing on a blind fixed-period clock.
+
+    Used by the frequency-matched control (Phase C_freq): it fires every
+    ``interval`` samples after ``start_after`` (the pre-training prefix),
+    regardless of any error or drift signal. With ``interval`` chosen so the
+    total fire count matches C_early's mean, comparing C_freq against C_early
+    isolates adaptation *frequency* from adaptation *timing* — the standard
+    control for the "it only helps because it retrains more often" objection.
+    """
+
+    def __init__(self, interval: int, start_after: int = 0):
+        if interval <= 0:
+            raise ValueError("interval must be positive")
+        self.interval = interval
+        self.start_after = start_after
+        self.fired_indices: list[int] = []
+
+    def update(self, index: int, error: int) -> bool:
+        """Fire when ``index`` lands on the periodic clock (``error`` ignored)."""
+        if index > self.start_after and (index - self.start_after) % self.interval == 0:
+            self.fired_indices.append(index)
+            return True
+        return False
+
+
 class ScheduledDriftTrigger:
     """Adaptation trigger replaying a fixed :class:`DriftSchedule`.
 
