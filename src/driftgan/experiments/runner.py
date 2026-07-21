@@ -34,12 +34,14 @@ from typing import Any, cast
 
 import numpy as np
 import pandas as pd
+from river import drift as river_drift
 from river import metrics as river_metrics
 
 from driftgan.augment.base import Buffer
 from driftgan.config import ExperimentConfig
 from driftgan.data.stream import ATTACK, BENIGN, stream_csv
 from driftgan.drift.schedule import (
+    DynamicDetectorTrigger,
     DynamicPHTTrigger,
     PeriodicTrigger,
     ScheduledDriftTrigger,
@@ -53,7 +55,7 @@ from driftgan.logging import get_logger, log_ctx
 from driftgan.metrics.cost import CostTracker
 from driftgan.metrics.recovery import compute_recovery_events, save_recovery
 from driftgan.metrics.rolling import RollingBinaryStats
-from driftgan.models.hat import make_hat
+from driftgan.models.streaming import CONTINUOUS_PHASES, make_model
 
 logger = get_logger("driftgan.runner")
 
@@ -148,13 +150,17 @@ def run_phase(
     phase = phase or config.phase
     seed_everything(seed)
 
-    model = make_hat(config, seed)
+    model = make_model(config, phase, seed)
+    continuous = phase in CONTINUOUS_PHASES  # ARF/SRP self-adapt: learn every sample
     rolling = RollingBinaryStats(window_size=config.rolling_f1_window, pos_label=ATTACK)
     acc = river_metrics.Accuracy()
     tracker = CostTracker(rss_sample_interval=config.rss_sample_interval)
 
     # ── trigger selection ────────────────────────────────────────────
-    trigger: DynamicPHTTrigger | ScheduledDriftTrigger | PeriodicTrigger | None = None
+    trigger: (
+        DynamicPHTTrigger | ScheduledDriftTrigger | PeriodicTrigger
+        | DynamicDetectorTrigger | None
+    ) = None
     dual: DualPHT | None = None
     monitor: ReconstructionMonitor | None = None
     if phase in ("B", "C", "C_prime", "C_cond"):
@@ -164,6 +170,10 @@ def run_phase(
             )
         else:
             trigger = DynamicPHTTrigger(delta=config.pht_delta)
+    elif phase == "B_adwin":
+        trigger = DynamicDetectorTrigger(river_drift.ADWIN(), name="adwin")
+    elif phase == "B_kswin":
+        trigger = DynamicDetectorTrigger(river_drift.KSWIN(seed=seed), name="kswin")
     elif phase == "C_freq":
         trigger = PeriodicTrigger(
             interval=config.periodic_adapt_interval, start_after=config.n_pretrain
@@ -260,12 +270,16 @@ def run_phase(
 
             fired = False
             fire_source = ""
-            if trigger is not None:
+            if continuous:
+                pass  # ARF/SRP self-adapt; learning happens every sample below
+            elif trigger is not None:
                 fired = trigger.update(n_processed, error)
                 if isinstance(trigger, ScheduledDriftTrigger):
                     fire_source = "schedule"
                 elif isinstance(trigger, PeriodicTrigger):
                     fire_source = "periodic"
+                elif isinstance(trigger, DynamicDetectorTrigger):
+                    fire_source = trigger.name
                 else:
                     fire_source = "pht"
             elif dual is not None:
@@ -292,7 +306,10 @@ def run_phase(
                         index=n_processed, source=fire_source, n_synthetic=n_syn,
                     )
 
-            if training_enabled:
+            if continuous:
+                with tracker.section("hat_update"):
+                    model.learn_one(x, y)
+            elif training_enabled:
                 with tracker.section("hat_update"):
                     model.learn_one(x, y)
                 samples_to_train -= 1

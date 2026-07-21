@@ -15,7 +15,12 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 CONFIGS_DIR = REPO_ROOT / "configs"
 RESULTS_DIR = REPO_ROOT / "results"
 
-VALID_PHASES = ("A", "B", "C", "C_prime", "C_cond", "C_early", "C_freq")
+VALID_PHASES = (
+    "A", "B", "C", "C_prime", "C_cond", "C_early", "C_freq",
+    # SOTA baselines (Experiment #3): alternative drift detectors driving the
+    # reactive HAT, and self-adapting streaming ensembles.
+    "B_adwin", "B_kswin", "ARF", "SRP",
+)
 
 
 @dataclass

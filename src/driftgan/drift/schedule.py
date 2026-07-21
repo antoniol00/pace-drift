@@ -149,6 +149,27 @@ class DynamicPHTTrigger:
         return False
 
 
+class DynamicDetectorTrigger:
+    """Adaptation trigger driven by any river drift detector (ADWIN, KSWIN, …).
+
+    Generalises :class:`DynamicPHTTrigger` to the alternative detectors used as
+    SOTA baselines (Experiment #3): the detector is fed the 0/1 classifier error
+    and fires adaptation whenever it flags drift.
+    """
+
+    def __init__(self, detector: Any, name: str = "detector"):
+        self._detector = detector
+        self.name = name
+        self.fired_indices: list[int] = []
+
+    def update(self, index: int, error: int) -> bool:
+        self._detector.update(error)
+        if self._detector.drift_detected:
+            self.fired_indices.append(index)
+            return True
+        return False
+
+
 class PeriodicTrigger:
     """Adaptation trigger firing on a blind fixed-period clock.
 

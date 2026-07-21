@@ -33,6 +33,10 @@ PHASE_CONFIG = {
     "C_cond": "phase_c_cond.yaml",
     "C_early": "phase_c_early.yaml",
     "C_freq": "phase_c_freq.yaml",
+    "B_adwin": "phase_b_adwin.yaml",
+    "B_kswin": "phase_b_kswin.yaml",
+    "ARF": "phase_arf.yaml",
+    "SRP": "phase_srp.yaml",
 }
 
 

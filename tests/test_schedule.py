@@ -33,6 +33,22 @@ def test_periodic_trigger_rejects_nonpositive_interval():
         PeriodicTrigger(interval=0)
 
 
+def test_dynamic_detector_trigger_fires_on_sustained_error():
+    from river import drift as river_drift
+
+    from driftgan.drift.schedule import DynamicDetectorTrigger
+
+    trig = DynamicDetectorTrigger(river_drift.ADWIN(), name="adwin")
+    # long clean run then a burst of errors -> ADWIN flags a change
+    fired = False
+    for i in range(2000):
+        err = 0 if i < 1500 else 1
+        if trig.update(i, err):
+            fired = True
+    assert fired and trig.name == "adwin"
+    assert trig.fired_indices and all(idx >= 1500 for idx in trig.fired_indices)
+
+
 def test_scheduled_trigger_fires_exactly_at_index():
     schedule = DriftSchedule(indices=[10, 25], source="labels")
     trig = ScheduledDriftTrigger(schedule)

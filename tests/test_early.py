@@ -79,3 +79,47 @@ def test_match_lead_times_counts_missed_and_fp():
     assert report.pairs == []
     assert report.missed_anticipation_rate == 1.0
     assert report.anticipated_fp_rate == 1.0
+
+
+# --- cheap shift-monitor ablations (share the AE's frozen-reference protocol) ---
+import pytest  # noqa: E402
+
+from driftgan.early.shift_monitors import (  # noqa: E402
+    KSMonitor,
+    MeanShiftMonitor,
+    MMDMonitor,
+    PCAReconstructionMonitor,
+)
+
+
+def _make(kind):
+    common = dict(check_interval=200, buffer_size=400, seed=0)
+    if kind is PCAReconstructionMonitor:
+        return kind(latent=4, **common)
+    if kind is MMDMonitor:
+        return kind(sample=128, **common)
+    return kind(**common)
+
+
+@pytest.mark.parametrize(
+    "kind", [PCAReconstructionMonitor, KSMonitor, MMDMonitor, MeanShiftMonitor]
+)
+def test_shift_monitor_spikes_after_covariate_shift(kind):
+    m = _make(kind)
+    stable = _feed(m, mean=0.0, n=3000, seed=1)
+    shifted = _feed(m, mean=8.0, n=2000, seed=2, start=3000)
+    assert len(stable) >= 3 and len(shifted) >= 3
+    baseline = float(np.median(stable))
+    assert max(shifted[:3]) > 2 * (baseline + 1e-9)
+
+
+@pytest.mark.parametrize(
+    "kind", [PCAReconstructionMonitor, KSMonitor, MMDMonitor, MeanShiftMonitor]
+)
+def test_shift_monitor_quiet_without_shift(kind):
+    m = _make(kind)
+    _feed(m, mean=0.0, n=600, seed=1)
+    steady = _feed(m, mean=0.0, n=3000, seed=2, start=600)
+    shifted = _feed(m, mean=6.0, n=1500, seed=3, start=3600)
+    # No-shift scores stay well below the monitor's own response to a real shift.
+    assert max(steady) < 0.5 * max(shifted[:3])

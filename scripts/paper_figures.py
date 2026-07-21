@@ -367,12 +367,59 @@ def fig6_frequency_ablation() -> None:
     plt.close(fig)
 
 
+def fig8_sota_baselines(summ: pd.DataFrame) -> None:
+    """Compare C_early against SOTA streaming baselines (Experiment #3).
+
+    Alternative drift detectors on the reactive HAT (B_adwin, B_kswin) and self-
+    adapting ensembles (ARF, SRP), on final F1 and overall local F1. Skipped
+    until the SOTA runs exist.
+    """
+    order = ["B", "B_adwin", "B_kswin", "ARF", "SRP", "C_early"]
+    if not all((RUNS / p / "seed_0" / "summary.json").exists() for p in order):
+        print("  (fig8 skipped — SOTA runs not present yet)")
+        return
+    pal = {"B": "#0072B2", "B_adwin": "#56B4E9", "B_kswin": "#CC79A7",
+           "ARF": "#E69F00", "SRP": "#D55E00", "C_early": "#009E73"}
+    edges = [0, 0.5e6, 1.0e6, 1.5e6, 2.05e6]
+
+    fig, (axL, axR) = plt.subplots(1, 2, figsize=(12.5, 4.8))
+    x = np.arange(len(order))
+    for i, ph in enumerate(order):
+        vals = summ.loc[summ.phase == ph, "final_f1"].values
+        axL.bar(i, vals.mean(), 0.62, color=pal[ph], alpha=0.9, edgecolor="white")
+        jit = (np.random.default_rng(0).random(len(vals)) - 0.5) * 0.2
+        axL.scatter(i + jit, vals, color="#222", s=16, zorder=3)
+        axL.annotate(f"{vals.mean():.2f}", (i, vals.mean()), xytext=(0, 3),
+                     textcoords="offset points", ha="center", fontsize=8.5,
+                     fontweight="bold")
+    axL.set_xticks(x)
+    axL.set_xticklabels(order, rotation=25, ha="right", fontsize=9)
+    axL.set_ylabel("final F1 (bar = mean, dots = seeds)")
+    axL.set_title("A. Final detection quality vs SOTA")
+    axL.set_ylim(0, 1.05)
+
+    overall = [_local_f1_by_segment(ph, edges)[1] for ph in order]
+    axR.bar(x, overall, 0.62, color=[pal[p] for p in order], edgecolor="white")
+    for i, v in enumerate(overall):
+        axR.annotate(f"{v:.2f}", (i, v), xytext=(0, 3), textcoords="offset points",
+                     ha="center", fontsize=8.5, fontweight="bold")
+    axR.set_xticks(x)
+    axR.set_xticklabels(order, rotation=25, ha="right", fontsize=9)
+    axR.set_ylabel("overall local F1 (mean valid window)")
+    axR.set_title("B. Sustained quality vs SOTA")
+    axR.set_ylim(0, max(overall) * 1.2)
+    fig.savefig(OUT / "fig8_sota_baselines.png")
+    plt.close(fig)
+    print("  wrote fig8_sota_baselines.png")
+
+
 def main() -> None:
     summ = load_summaries()
     fig1_trajectory()
     fig2_recovery(summ)
     fig3_early(summ)
     fig6_frequency_ablation()
+    fig8_sota_baselines(summ)
     print("wrote:")
     for p in sorted(OUT.glob("*.png")):
         print(" ", p)

@@ -47,6 +47,13 @@ run-C-early:
 run-C-freq:
 	uv run python run_experiment.py --phase C_freq --seeds $(SEEDS) --n-jobs $(N_JOBS)
 
+# SOTA baselines (Experiment #3): alternative detectors + self-adapting ensembles.
+run-sota:
+	uv run python run_experiment.py --phase B_adwin --seeds $(SEEDS) --n-jobs $(N_JOBS)
+	uv run python run_experiment.py --phase B_kswin --seeds $(SEEDS) --n-jobs $(N_JOBS)
+	uv run python run_experiment.py --phase ARF --seeds $(SEEDS) --n-jobs $(N_JOBS)
+	uv run python run_experiment.py --phase SRP --seeds $(SEEDS) --n-jobs $(N_JOBS)
+
 run-all: schedule run-A run-B run-C run-C-prime run-C-cond run-C-freq run-C-early
 
 report:
