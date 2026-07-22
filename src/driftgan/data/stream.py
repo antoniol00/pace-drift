@@ -1,4 +1,7 @@
-"""Streaming CSV reader and row-by-row preprocessing for CICIDS2017."""
+"""Streaming CSV reader and row-by-row preprocessing.
+
+Benign label is configurable to support multiple datasets.
+"""
 
 from __future__ import annotations
 
@@ -16,6 +19,7 @@ def preprocess_row(
     row: dict[str, str],
     drop_cols: frozenset[str] | set[str],
     target_col: str,
+    benign_label: str = BENIGN,
 ) -> Sample:
     """Transform a raw CSV row into ``(x, y, y_raw)`` for river.
 
@@ -26,8 +30,8 @@ def preprocess_row(
       label is preserved in ``y_raw`` (used by the conditional GAN and the
       label-based drift schedule).
     """
-    y_raw = row.pop(target_col, BENIGN).strip()
-    y = BENIGN if y_raw == BENIGN else ATTACK
+    y_raw = row.pop(target_col, benign_label).strip()
+    y = BENIGN if y_raw == benign_label else ATTACK
 
     x: dict[str, float] = {}
     for col, val in row.items():
@@ -50,6 +54,7 @@ def stream_csv(
     target_col: str,
     start_row: int = 0,
     max_rows: int | None = None,
+    benign_label: str = BENIGN,
 ) -> Iterator[Sample]:
     """Yield ``(x, y, y_raw)`` row by row starting at ``start_row``.
 
@@ -63,7 +68,7 @@ def stream_csv(
         for _ in range(start_row):
             next(reader, None)
         for row in reader:
-            x, y, y_raw = preprocess_row(dict(row), drop_cols, target_col)
+            x, y, y_raw = preprocess_row(dict(row), drop_cols, target_col, benign_label)
             if not x:
                 continue
             yield x, y, y_raw
