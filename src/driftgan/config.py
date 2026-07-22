@@ -23,6 +23,9 @@ VALID_PHASES = (
     # Budget-matched SOTA (Experiment #3b): ARF/SRP adapting only in triggered
     # train windows on the shared schedule (same label budget as B).
     "ARF_sched", "SRP_sched",
+    # C_early's proactive early-detection trigger on a SOTA ensemble base learner
+    # (Experiment #3c): does anticipation help the strongest model, or only HAT?
+    "ARF_early", "SRP_early",
     # Monitor ablations of C_early (Experiment #2): cheap shift monitors.
     "C_early_mean", "C_early_pca", "C_early_ks", "C_early_mmd",
 )

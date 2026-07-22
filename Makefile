@@ -59,6 +59,11 @@ run-sota-matched:
 	uv run python run_experiment.py --phase ARF_sched --seeds $(SEEDS) --n-jobs $(N_JOBS) --drift-schedule $(SCHEDULE)
 	uv run python run_experiment.py --phase SRP_sched --seeds $(SEEDS) --n-jobs $(N_JOBS) --drift-schedule $(SCHEDULE)
 
+# Ensemble + proactive early-detection trigger (#3c): does anticipation help the SOTA model?
+run-early-ensemble:
+	uv run python run_experiment.py --phase ARF_early --seeds $(SEEDS) --n-jobs $(N_JOBS)
+	uv run python run_experiment.py --phase SRP_early --seeds $(SEEDS) --n-jobs $(N_JOBS)
+
 run-all: schedule run-A run-B run-C run-C-prime run-C-cond run-C-freq run-C-early
 
 report:

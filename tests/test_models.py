@@ -12,15 +12,16 @@ def _cfg():
 
 def test_make_model_dispatch_by_prefix():
     cfg = _cfg()
-    assert type(make_model(cfg, "ARF", 0)).__name__ == "ARFClassifier"
-    assert type(make_model(cfg, "ARF_sched", 0)).__name__ == "ARFClassifier"
-    assert type(make_model(cfg, "SRP", 0)).__name__ == "SRPClassifier"
-    assert type(make_model(cfg, "SRP_sched", 0)).__name__ == "SRPClassifier"
+    for ph in ("ARF", "ARF_sched", "ARF_early"):
+        assert type(make_model(cfg, ph, 0)).__name__ == "ARFClassifier"
+    for ph in ("SRP", "SRP_sched", "SRP_early"):
+        assert type(make_model(cfg, ph, 0)).__name__ == "SRPClassifier"
     assert type(make_model(cfg, "B", 0)).__name__ == "HoeffdingAdaptiveTreeClassifier"
 
 
-def test_budget_matched_variants_are_not_continuous():
-    # the _sched variants must adapt only in triggered windows, not every sample
+def test_triggered_ensemble_variants_are_not_continuous():
+    # only the bare ARF/SRP self-adapt every sample; _sched (reactive) and _early
+    # (proactive) variants adapt only in triggered windows
     assert "ARF" in CONTINUOUS_PHASES and "SRP" in CONTINUOUS_PHASES
-    assert "ARF_sched" not in CONTINUOUS_PHASES
-    assert "SRP_sched" not in CONTINUOUS_PHASES
+    for ph in ("ARF_sched", "SRP_sched", "ARF_early", "SRP_early"):
+        assert ph not in CONTINUOUS_PHASES

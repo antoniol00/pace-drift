@@ -41,6 +41,8 @@ PHASE_CONFIG = {
     "C_early_pca": "phase_c_early_pca.yaml",
     "ARF_sched": "phase_arf_sched.yaml",
     "SRP_sched": "phase_srp_sched.yaml",
+    "ARF_early": "phase_arf_early.yaml",
+    "SRP_early": "phase_srp_early.yaml",
 }
 
 

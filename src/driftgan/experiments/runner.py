@@ -198,7 +198,8 @@ def run_phase(
         trigger = PeriodicTrigger(
             interval=config.periodic_adapt_interval, start_after=config.n_pretrain
         )
-    elif phase.startswith("C_early"):
+    elif phase.startswith("C_early") or phase in ("ARF_early", "SRP_early"):
+        # proactive dual (recon+class) trigger; base learner varies by phase
         dual = DualPHT(
             class_delta=config.pht_delta,
             recon_delta=config.recon_pht_delta,

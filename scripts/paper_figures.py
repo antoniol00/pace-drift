@@ -528,6 +528,56 @@ def fig10_budget_matched(summ: pd.DataFrame) -> None:
     print("  wrote fig10_budget_matched.png")
 
 
+def fig11_early_ensemble() -> None:
+    """#3c: does the proactive early trigger help the SOTA base learner, or only HAT?
+
+    The base-learner x trigger 2x2 (reactive vs proactive early detection) on
+    overall local F1. Skipped until ARF_early / SRP_early exist.
+    """
+    # (base-learner label, reactive phase, proactive-early phase)
+    rows = [("HAT", "B", "C_early"), ("ARF", "ARF_sched", "ARF_early"),
+            ("SRP", "SRP_sched", "SRP_early")]
+    needed = {p for _, r, e in rows for p in (r, e)}
+    if not all((RUNS / p / "seed_0" / "summary.json").exists() for p in needed):
+        print("  (fig11 skipped — ARF_early/SRP_early not present yet)")
+        return
+    edges = [0, 0.5e6, 1.0e6, 1.5e6, 2.05e6]
+    ov = {p: _local_f1_by_segment(p, edges)[1] for p in needed}
+
+    fig, ax = plt.subplots(figsize=(9.5, 5.0))
+    x = np.arange(len(rows))
+    w = 0.38
+    for i, (_base, r, e) in enumerate(rows):
+        ax.bar(i - w / 2, ov[r], w, color="#b0b0b0", edgecolor="white",
+               label="reactive trigger" if i == 0 else None)
+        ax.bar(i + w / 2, ov[e], w, color="#009E73", edgecolor="white",
+               label="proactive early trigger" if i == 0 else None)
+        for xi, ph in ((i - w / 2, r), (i + w / 2, e)):
+            ax.annotate(f"{ov[ph]:.2f}", (xi, ov[ph]), xytext=(0, 3),
+                        textcoords="offset points", ha="center", fontsize=9,
+                        fontweight="bold")
+        d = ov[e] - ov[r]
+        ax.annotate(f"{'+' if d >= 0 else ''}{d:.2f}", (i, max(ov[r], ov[e])),
+                    xytext=(0, 20), textcoords="offset points", ha="center",
+                    fontsize=10, fontweight="bold",
+                    color="#009E73" if d >= 0 else "#d55e00")
+    ax.set_xticks(x)
+    ax.set_xticklabels([b for b, _, _ in rows], fontsize=11)
+    ax.set_xlabel("base learner")
+    ax.set_ylabel("overall local F1 (mean valid window, 5 seeds)")
+    ax.set_title("Does proactive early detection help the base learner?")
+    ax.set_ylim(0, max(ov.values()) * 1.25)
+    ax.legend(loc="upper left")
+    ax.text(0.5, 1.10, "Δ above each pair = gain from swapping reactive → proactive "
+            "early trigger, holding the model fixed.\nIf the ensemble Δ is positive, "
+            "the anticipation idea improves the SOTA model, not just the weak HAT.",
+            transform=ax.transAxes, ha="center", va="bottom", fontsize=9, color="#555")
+    fig.subplots_adjust(top=0.82)
+    fig.savefig(OUT / "fig11_early_ensemble.png")
+    plt.close(fig)
+    print("  wrote fig11_early_ensemble.png")
+
+
 def main() -> None:
     summ = load_summaries()
     fig1_trajectory()
@@ -537,6 +587,7 @@ def main() -> None:
     fig8_sota_baselines(summ)
     fig9_monitor_pipeline(summ)
     fig10_budget_matched(summ)
+    fig11_early_ensemble()
     print("wrote:")
     for p in sorted(OUT.glob("*.png")):
         print(" ", p)
