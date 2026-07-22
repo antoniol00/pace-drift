@@ -153,6 +153,12 @@ def fig7_monitor_ablation(cfg) -> None:
     axB.set_ylabel("anticipation recall at FP ≤ 0.5")
     axB.set_title("B. Recall at a matched false-positive budget")
     axB.set_ylim(0, 1)
+    fig.text(0.5, 0.005, "Under a common detector, the generative AE (green) does NOT "
+             "dominate: a trivial mean-shift statistic matches or exceeds it, and no "
+             "monitor clears recall ≈ 0.5.\nThe autoencoder is not justified as the "
+             "anticipation signal — a cheap covariate-shift test suffices.",
+             ha="center", va="bottom", fontsize=8.5, color="#555")
+    fig.subplots_adjust(bottom=0.22)
     fig.savefig(OUT / "fig7_monitor_ablation.png")
     plt.close(fig)
     print("wrote", OUT / "fig7_monitor_ablation.png")

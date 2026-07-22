@@ -1,0 +1,14 @@
+phase: C_early_mean
+# Monitor ablation (#2): replace the autoencoder with the cheapest possible
+# covariate-shift monitor (L2 shift of the standardized feature mean). PHT_recon
+# recalibrated on the cached mean-shift series to match the AE's fire count
+# (~55/seed, recall 0.23 — identical to the AE). Tests whether the generative
+# model is needed at all for the anticipation signal.
+monitor_type: mean
+monitor_interval: 1000
+monitor_clip: 10.0
+recon_pht_delta: 0.0005
+recon_pht_threshold: 4.0
+recon_pht_min_instances: 10
+lead_horizon: 20000
+early_augment: false

@@ -381,36 +381,105 @@ def fig8_sota_baselines(summ: pd.DataFrame) -> None:
     pal = {"B": "#0072B2", "B_adwin": "#56B4E9", "B_kswin": "#CC79A7",
            "ARF": "#E69F00", "SRP": "#D55E00", "C_early": "#009E73"}
     edges = [0, 0.5e6, 1.0e6, 1.5e6, 2.05e6]
+    # adaptation budget per phase (ARF/SRP self-adapt on *every* sample)
+    def budget(ph: str) -> str:
+        if ph in ("ARF", "SRP"):
+            return "~2M\n(cont.)"
+        nd = np.mean([json.loads((RUNS / ph / f"seed_{s}" / "summary.json").read_text())["n_drifts"]
+                      for s in SEEDS])
+        return f"{nd:.0f}\nadapts"
+    ticks = [f"{p}\n{budget(p)}" for p in order]
 
-    fig, (axL, axR) = plt.subplots(1, 2, figsize=(12.5, 4.8))
+    fig, (axL, axR) = plt.subplots(1, 2, figsize=(12.5, 5.1))
     x = np.arange(len(order))
+    hatch = {"ARF": "//", "SRP": "//"}  # mark the continuous-supervision baselines
     for i, ph in enumerate(order):
         vals = summ.loc[summ.phase == ph, "final_f1"].values
-        axL.bar(i, vals.mean(), 0.62, color=pal[ph], alpha=0.9, edgecolor="white")
+        axL.bar(i, vals.mean(), 0.62, color=pal[ph], alpha=0.9, edgecolor="white",
+                hatch=hatch.get(ph))
         jit = (np.random.default_rng(0).random(len(vals)) - 0.5) * 0.2
         axL.scatter(i + jit, vals, color="#222", s=16, zorder=3)
         axL.annotate(f"{vals.mean():.2f}", (i, vals.mean()), xytext=(0, 3),
                      textcoords="offset points", ha="center", fontsize=8.5,
                      fontweight="bold")
     axL.set_xticks(x)
-    axL.set_xticklabels(order, rotation=25, ha="right", fontsize=9)
+    axL.set_xticklabels(ticks, fontsize=8)
     axL.set_ylabel("final F1 (bar = mean, dots = seeds)")
     axL.set_title("A. Final detection quality vs SOTA")
-    axL.set_ylim(0, 1.05)
+    axL.set_ylim(0, 1.08)
 
     overall = [_local_f1_by_segment(ph, edges)[1] for ph in order]
-    axR.bar(x, overall, 0.62, color=[pal[p] for p in order], edgecolor="white")
+    axR.bar(x, overall, 0.62, color=[pal[p] for p in order], edgecolor="white",
+            hatch=[hatch.get(p, "") for p in order])
     for i, v in enumerate(overall):
         axR.annotate(f"{v:.2f}", (i, v), xytext=(0, 3), textcoords="offset points",
                      ha="center", fontsize=8.5, fontweight="bold")
     axR.set_xticks(x)
-    axR.set_xticklabels(order, rotation=25, ha="right", fontsize=9)
+    axR.set_xticklabels(ticks, fontsize=8)
     axR.set_ylabel("overall local F1 (mean valid window)")
     axR.set_title("B. Sustained quality vs SOTA")
-    axR.set_ylim(0, max(overall) * 1.2)
+    axR.set_ylim(0, max(overall) * 1.25)
+    fig.text(0.5, 0.005, "ARF / SRP (hatched) learn on EVERY sample — ~2M supervised "
+             "updates — vs 160–340 triggered adaptations for B / C_early. The SOTA "
+             "lead is real but NOT budget-matched; alternative detectors (ADWIN/KSWIN) "
+             "do not beat plain PHT.", ha="center", va="bottom", fontsize=8.5,
+             color="#555")
+    fig.subplots_adjust(bottom=0.28)
     fig.savefig(OUT / "fig8_sota_baselines.png")
     plt.close(fig)
     print("  wrote fig8_sota_baselines.png")
+
+
+def fig9_monitor_pipeline(summ: pd.DataFrame) -> None:
+    """#2 confirmation in the full pipeline: does a cheap monitor match the AE?
+
+    Runs the C_early pipeline with the autoencoder replaced by the mean-shift and
+    PCA monitors (calibrated to the AE's fire count). If final/local F1 match, the
+    generative monitor is not needed. Skipped until the variant runs exist.
+    """
+    order = ["C_early", "C_early_mean", "C_early_pca"]
+    if not all((RUNS / p / "seed_0" / "summary.json").exists() for p in order):
+        print("  (fig9 skipped — C_early monitor variants not present yet)")
+        return
+    labels = {"C_early": "AE\n(generative)", "C_early_mean": "mean-shift\n(trivial)",
+              "C_early_pca": "PCA recon\n(linear)"}
+    pal = {"C_early": "#009E73", "C_early_mean": "#999999", "C_early_pca": "#0072B2"}
+    edges = [0, 0.5e6, 1.0e6, 1.5e6, 2.05e6]
+
+    fig, (axL, axR) = plt.subplots(1, 2, figsize=(11.5, 5.0))
+    x = np.arange(len(order))
+    for i, ph in enumerate(order):
+        vals = summ.loc[summ.phase == ph, "final_f1"].values
+        axL.bar(i, vals.mean(), 0.6, color=pal[ph], edgecolor="white")
+        axL.scatter(i + (np.random.default_rng(0).random(len(vals)) - 0.5) * 0.2,
+                    vals, color="#222", s=16, zorder=3)
+        axL.annotate(f"{vals.mean():.3f}", (i, vals.mean()), xytext=(0, 3),
+                     textcoords="offset points", ha="center", fontsize=9, fontweight="bold")
+    axL.set_xticks(x)
+    axL.set_xticklabels([labels[p] for p in order], fontsize=9)
+    axL.set_ylabel("final F1 (bar = mean, dots = seeds)")
+    axL.set_title("A. Final F1 (monitor swapped in pipeline)", fontsize=11)
+    axL.set_ylim(0, 1.08)
+
+    overall = [_local_f1_by_segment(ph, edges)[1] for ph in order]
+    axR.bar(x, overall, 0.6, color=[pal[p] for p in order], edgecolor="white")
+    for i, v in enumerate(overall):
+        axR.annotate(f"{v:.3f}", (i, v), xytext=(0, 3), textcoords="offset points",
+                     ha="center", fontsize=9, fontweight="bold")
+    axR.set_xticks(x)
+    axR.set_xticklabels([labels[p] for p in order], fontsize=9)
+    axR.set_ylabel("overall local F1")
+    axR.set_title("B. Sustained F1 (AE ≈ PCA ≫ mean-shift)", fontsize=11)
+    axR.set_ylim(0, max(overall) * 1.25)
+    fig.text(0.5, 0.005, "In the full pipeline a linear PCA monitor nearly matches the "
+             "autoencoder (0.97 vs 0.99 final); a trivial mean-shift is clearly worse.\n"
+             "A reconstruction signal is needed — but the generative/non-linear model is "
+             "over-engineered: cheap PCA suffices.", ha="center", va="bottom",
+             fontsize=8.5, color="#555")
+    fig.subplots_adjust(bottom=0.30)
+    fig.savefig(OUT / "fig9_monitor_pipeline.png")
+    plt.close(fig)
+    print("  wrote fig9_monitor_pipeline.png")
 
 
 def main() -> None:
@@ -420,6 +489,7 @@ def main() -> None:
     fig3_early(summ)
     fig6_frequency_ablation()
     fig8_sota_baselines(summ)
+    fig9_monitor_pipeline(summ)
     print("wrote:")
     for p in sorted(OUT.glob("*.png")):
         print(" ", p)

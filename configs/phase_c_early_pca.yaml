@@ -1,0 +1,12 @@
+phase: C_early_pca
+# Monitor ablation (#2): linear PCA-reconstruction monitor in place of the AE.
+# PHT_recon calibrated on the cached PCA series (~42 fires/seed, recall 0.14).
+monitor_type: pca
+monitor_interval: 1000
+monitor_latent: 16
+monitor_clip: 10.0
+recon_pht_delta: 0.005
+recon_pht_threshold: 0.1
+recon_pht_min_instances: 10
+lead_horizon: 20000
+early_augment: false

@@ -49,6 +49,7 @@ from driftgan.drift.schedule import (
 )
 from driftgan.early.dual_pht import DualPHT, match_lead_times
 from driftgan.early.reconstruction_monitor import ReconstructionMonitor
+from driftgan.early.shift_monitors import MONITOR_TYPES, ShiftMonitor
 from driftgan.experiments.manifest import build_manifest, save_manifest
 from driftgan.experiments.seeding import seed_everything
 from driftgan.logging import get_logger, log_ctx
@@ -126,6 +127,25 @@ def _make_augmenter(phase: str, config: ExperimentConfig, seed: int) -> Any:
     return None
 
 
+def _make_monitor(config: ExperimentConfig, seed: int) -> ReconstructionMonitor | ShiftMonitor:
+    """Build the early-detection monitor for the phase (AE or a cheap ablation)."""
+    kind = config.monitor_type
+    if kind == "ae":
+        return ReconstructionMonitor(
+            check_interval=config.monitor_interval,
+            hidden=config.monitor_hidden,
+            latent=config.monitor_latent,
+            epochs=config.monitor_epochs,
+            clip=config.monitor_clip,
+            device=config.device,
+            seed=seed,
+        )
+    common = dict(check_interval=config.monitor_interval, clip=config.monitor_clip, seed=seed)
+    if kind == "pca":
+        return MONITOR_TYPES["pca"](latent=config.monitor_latent, **common)
+    return MONITOR_TYPES[kind](**common)
+
+
 def run_phase(
     config: ExperimentConfig,
     phase: str | None = None,
@@ -162,7 +182,7 @@ def run_phase(
         | DynamicDetectorTrigger | None
     ) = None
     dual: DualPHT | None = None
-    monitor: ReconstructionMonitor | None = None
+    monitor: ReconstructionMonitor | ShiftMonitor | None = None
     if phase in ("B", "C", "C_prime", "C_cond"):
         if config.drift_schedule and not force_dynamic:
             trigger = ScheduledDriftTrigger(
@@ -178,22 +198,14 @@ def run_phase(
         trigger = PeriodicTrigger(
             interval=config.periodic_adapt_interval, start_after=config.n_pretrain
         )
-    elif phase == "C_early":
+    elif phase.startswith("C_early"):
         dual = DualPHT(
             class_delta=config.pht_delta,
             recon_delta=config.recon_pht_delta,
             recon_threshold=config.recon_pht_threshold,
             recon_min_instances=config.recon_pht_min_instances,
         )
-        monitor = ReconstructionMonitor(
-            check_interval=config.monitor_interval,
-            hidden=config.monitor_hidden,
-            latent=config.monitor_latent,
-            epochs=config.monitor_epochs,
-            clip=config.monitor_clip,
-            device=config.device,
-            seed=seed,
-        )
+        monitor = _make_monitor(config, seed)
 
     augmenter = _make_augmenter(phase, config, seed)
 

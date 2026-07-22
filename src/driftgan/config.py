@@ -20,6 +20,8 @@ VALID_PHASES = (
     # SOTA baselines (Experiment #3): alternative drift detectors driving the
     # reactive HAT, and self-adapting streaming ensembles.
     "B_adwin", "B_kswin", "ARF", "SRP",
+    # Monitor ablations of C_early (Experiment #2): cheap shift monitors.
+    "C_early_mean", "C_early_pca", "C_early_ks", "C_early_mmd",
 )
 
 
@@ -73,6 +75,7 @@ class ExperimentConfig:
     cgan_loss: str = "wgan_gp"  # "wgan_gp" | "bce" (ablation)
 
     # Early detection (C_early)
+    monitor_type: str = "ae"  # "ae" | "pca" | "ks" | "mmd" | "mean" (ablation, #2)
     monitor_interval: int = 1_000  # recon-error sample cadence (finer -> more PHT updates)
     monitor_epochs: int = 5
     monitor_hidden: int = 32

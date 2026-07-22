@@ -37,6 +37,8 @@ PHASE_CONFIG = {
     "B_kswin": "phase_b_kswin.yaml",
     "ARF": "phase_arf.yaml",
     "SRP": "phase_srp.yaml",
+    "C_early_mean": "phase_c_early_mean.yaml",
+    "C_early_pca": "phase_c_early_pca.yaml",
 }
 
 
