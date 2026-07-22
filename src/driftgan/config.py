@@ -20,6 +20,9 @@ VALID_PHASES = (
     # SOTA baselines (Experiment #3): alternative drift detectors driving the
     # reactive HAT, and self-adapting streaming ensembles.
     "B_adwin", "B_kswin", "ARF", "SRP",
+    # Budget-matched SOTA (Experiment #3b): ARF/SRP adapting only in triggered
+    # train windows on the shared schedule (same label budget as B).
+    "ARF_sched", "SRP_sched",
     # Monitor ablations of C_early (Experiment #2): cheap shift monitors.
     "C_early_mean", "C_early_pca", "C_early_ks", "C_early_mmd",
 )

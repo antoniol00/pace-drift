@@ -39,6 +39,8 @@ PHASE_CONFIG = {
     "SRP": "phase_srp.yaml",
     "C_early_mean": "phase_c_early_mean.yaml",
     "C_early_pca": "phase_c_early_pca.yaml",
+    "ARF_sched": "phase_arf_sched.yaml",
+    "SRP_sched": "phase_srp_sched.yaml",
 }
 
 

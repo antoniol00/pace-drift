@@ -1,0 +1,4 @@
+phase: ARF_sched
+# Budget-matched SOTA (#3b): ARF adapting only in triggered train windows on
+# the shared schedule (same ~233 adaptations as B). Isolates model capacity from
+# continuous supervision. Run with --drift-schedule results/drift_schedule.json.

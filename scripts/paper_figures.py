@@ -482,6 +482,52 @@ def fig9_monitor_pipeline(summ: pd.DataFrame) -> None:
     print("  wrote fig9_monitor_pipeline.png")
 
 
+def fig10_budget_matched(summ: pd.DataFrame) -> None:
+    """#3b: is the SOTA lead model capacity or continuous supervision?
+
+    ARF/SRP restricted to the same triggered schedule as B (budget-matched)
+    vs their continuous-learning selves. Skipped until the _sched runs exist.
+    """
+    order = ["B", "C_early", "ARF_sched", "SRP_sched", "ARF", "SRP"]
+    if not all((RUNS / p / "seed_0" / "summary.json").exists() for p in order):
+        print("  (fig10 skipped — budget-matched SOTA runs not present yet)")
+        return
+    pal = {"B": "#0072B2", "C_early": "#009E73", "ARF_sched": "#E69F00",
+           "SRP_sched": "#D55E00", "ARF": "#E69F00", "SRP": "#D55E00"}
+    hatch = {"ARF": "//", "SRP": "//"}
+    edges = [0, 0.5e6, 1.0e6, 1.5e6, 2.05e6]
+
+    def bud(ph: str) -> str:
+        if ph in ("ARF", "SRP"):
+            return "~2M cont."
+        nd = np.mean([json.loads((RUNS / ph / f"seed_{s}" / "summary.json").read_text())["n_drifts"]
+                      for s in SEEDS])
+        return f"{nd:.0f} adapts"
+    ticks = [f"{p}\n{bud(p)}" for p in order]
+
+    fig, ax = plt.subplots(figsize=(11, 5.0))
+    x = np.arange(len(order))
+    overall = [_local_f1_by_segment(ph, edges)[1] for ph in order]
+    ax.bar(x, overall, 0.62, color=[pal[p] for p in order], edgecolor="white",
+           hatch=[hatch.get(p, "") for p in order])
+    for i, v in enumerate(overall):
+        ax.annotate(f"{v:.2f}", (i, v), xytext=(0, 3), textcoords="offset points",
+                    ha="center", fontsize=9.5, fontweight="bold")
+    ax.set_xticks(x)
+    ax.set_xticklabels(ticks, fontsize=9)
+    ax.set_ylabel("overall local F1 (mean valid window, 5 seeds)")
+    ax.set_title("Budget-matched SOTA: is the lead model capacity or continuous supervision?")
+    ax.set_ylim(0, max(overall) * 1.2)
+    ax.text(0.5, 1.13, "Same schedule as B (~233 triggered adaptations): does a stronger "
+            "model alone win? | Hatched = continuous (~2M).\nThe drop from continuous to "
+            "budget-matched isolates the value of full supervision.",
+            transform=ax.transAxes, ha="center", va="bottom", fontsize=9, color="#555")
+    fig.subplots_adjust(top=0.80, bottom=0.16)
+    fig.savefig(OUT / "fig10_budget_matched.png")
+    plt.close(fig)
+    print("  wrote fig10_budget_matched.png")
+
+
 def main() -> None:
     summ = load_summaries()
     fig1_trajectory()
@@ -490,6 +536,7 @@ def main() -> None:
     fig6_frequency_ablation()
     fig8_sota_baselines(summ)
     fig9_monitor_pipeline(summ)
+    fig10_budget_matched(summ)
     print("wrote:")
     for p in sorted(OUT.glob("*.png")):
         print(" ", p)

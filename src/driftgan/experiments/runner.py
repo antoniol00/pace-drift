@@ -183,7 +183,7 @@ def run_phase(
     ) = None
     dual: DualPHT | None = None
     monitor: ReconstructionMonitor | ShiftMonitor | None = None
-    if phase in ("B", "C", "C_prime", "C_cond"):
+    if phase in ("B", "C", "C_prime", "C_cond", "ARF_sched", "SRP_sched"):
         if config.drift_schedule and not force_dynamic:
             trigger = ScheduledDriftTrigger(
                 load_schedule(config.drift_schedule), report_pht_delta=config.pht_delta

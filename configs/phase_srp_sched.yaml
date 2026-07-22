@@ -1,0 +1,3 @@
+phase: SRP_sched
+# Budget-matched SOTA (#3b): SRP adapting only in triggered train windows on the
+# shared schedule. Run with --drift-schedule results/drift_schedule.json.

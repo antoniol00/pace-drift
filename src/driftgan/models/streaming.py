@@ -14,16 +14,23 @@ from typing import Any
 from driftgan.config import ExperimentConfig
 from driftgan.models.hat import make_hat
 
+# Phases that self-adapt on every sample (continuous supervision). The "_sched"
+# variants use the SAME ensemble but adapt only in triggered train windows
+# (budget-matched control, Experiment #3b), so they are NOT continuous.
 CONTINUOUS_PHASES = ("ARF", "SRP")
 
 
 def make_model(config: ExperimentConfig, phase: str, seed: int) -> Any:
-    """Return the classifier for ``phase`` (HAT unless a SOTA ensemble is named)."""
-    if phase == "ARF":
+    """Return the classifier for ``phase`` (HAT unless a SOTA ensemble is named).
+
+    Dispatch is by prefix so budget-matched variants (``ARF_sched``, ``SRP_sched``)
+    reuse the same ensemble as ``ARF`` / ``SRP``.
+    """
+    if phase.startswith("ARF"):
         from river import forest
 
         return forest.ARFClassifier(seed=seed)
-    if phase == "SRP":
+    if phase.startswith("SRP"):
         from river import ensemble
 
         return ensemble.SRPClassifier(seed=seed)

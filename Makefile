@@ -54,6 +54,11 @@ run-sota:
 	uv run python run_experiment.py --phase ARF --seeds $(SEEDS) --n-jobs $(N_JOBS)
 	uv run python run_experiment.py --phase SRP --seeds $(SEEDS) --n-jobs $(N_JOBS)
 
+# Budget-matched SOTA (#3b): ARF/SRP adapting only in triggered windows on the schedule.
+run-sota-matched:
+	uv run python run_experiment.py --phase ARF_sched --seeds $(SEEDS) --n-jobs $(N_JOBS) --drift-schedule $(SCHEDULE)
+	uv run python run_experiment.py --phase SRP_sched --seeds $(SEEDS) --n-jobs $(N_JOBS) --drift-schedule $(SCHEDULE)
+
 run-all: schedule run-A run-B run-C run-C-prime run-C-cond run-C-freq run-C-early
 
 report:
