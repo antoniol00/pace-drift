@@ -2,6 +2,18 @@
 
 **Abstract.** Streaming intrusion detectors degrade when attack traffic drifts away from the distribution they were trained on. This project turns a proof-of-concept (Hoeffding Adaptive Tree + Page-Hinkley drift detection + GAN-based sample augmentation on CICIDS2017) into a reproducible, statistically defensible experiment: a shared drift schedule makes phases comparable event-by-event, per-event recovery metrics (RT, AUD) quantify adaptation quality, a naive-oversampling control isolates the GAN's contribution, and an experimental generative monitor tests whether reconstruction error can *anticipate* drift rather than react to it. The full 5-seed experiment has been run and hardened with reviewer-oriented controls — a frequency-matched adaptation control, an ablation of the generative monitor against cheap covariate-shift statistics, and state-of-the-art streaming baselines (ADWIN/KSWIN detectors, ARF/SRP ensembles). Findings: **GAN-based *adaptation* gives no measurable benefit over the reactive baseline** (a null result, honestly reported); the **generative *early-detection* monitor does anticipate drift**, though a cheap linear monitor nearly matches the autoencoder; and, most constructively, the **proactive early trigger improves every base learner tested — including the state-of-the-art ARF/SRP ensembles — while using fewer adaptations**, making it a cheap, model-agnostic *when-to-adapt* signal rather than a generative augmenter. See [Results](#8-results).
 
+## Key results at a glance
+
+- **GAN adaptation is a null result** — vanilla (C) and conditional WGAN-GP (C_cond) do not beat the reactive baseline B (Wilcoxon *p* = 0.62); naive oversampling (C') is worse. A generative *augmenter* is not the answer.
+- **The generative early-detection monitor works** — C_early reaches 0.986 final F1 with genuine anticipation lead times (~7K samples), and its gain is **timing, not frequency** (a frequency-matched blind control falls *below* B).
+- **The monitor can be cheap** — a linear PCA reconstruction nearly matches the autoencoder in the full pipeline (0.969 vs 0.986); the generative model is over-engineered.
+- **SOTA ensembles (ARF/SRP) win on raw quality** — but mainly by **model capacity, not continuous supervision**: budget-matched to ~233 sparse adaptations they still lead, while continuous learning (~2M updates) adds only ~0.05–0.08.
+- **The constructive result** — the proactive early trigger improves **every** base learner, more for the stronger ones, with fewer adaptations: **SRP + early detection = 0.769 sustained F1 with just 91 adaptations**.
+
+![Proactive early detection improves every base learner](docs/figures/fig11_early_ensemble.png)
+
+📄 **Full write-up:** [proposed architecture](docs/architecture.md) · [per-experiment analysis](docs/experiments/) (results, figures, interpretation).
+
 ## 1. Motivation
 
 Network intrusion detection systems trained offline face non-stationary traffic: new attack campaigns, tool variants and scanning behaviors shift the input distribution (covariate drift) and the input→label relation (real drift). A frozen model silently decays; error-based detectors (like the Page-Hinkley test) only react *after* misclassifications accumulate — precisely the window in which attacks go undetected. The interesting question is not whether adaptation helps (it does) but **how fast a detector recovers, at what computational cost, and whether generative models can shorten — or even anticipate — the recovery window** when only a handful of samples of the new attack exist.
@@ -73,7 +85,7 @@ flowchart LR
 | ARF_sched / SRP_sched | ensemble | PHT / schedule | model capacity at a matched label budget |
 | ARF_early / SRP_early | ensemble | dual PHT (recon + class) | whether the early trigger helps a SOTA learner |
 
-Details: [docs/methodology.md](docs/methodology.md) and [docs/gan_design.md](docs/gan_design.md).
+Details: [docs/architecture.md](docs/architecture.md) (the full component design), [docs/methodology.md](docs/methodology.md) (protocol) and [docs/gan_design.md](docs/gan_design.md) (GAN internals).
 
 ## 5. Dataset
 
@@ -149,6 +161,8 @@ So proactive generative-monitor-triggered adaptation is **not a crutch for a wea
 
 Figures: `fig1` local-F1 trajectory, `fig2` recovery comparison, `fig3` lead-time & cost/benefit, `fig4` resource/latency profile, `fig5` operating-point sensitivity, `fig6` frequency-control ablation, `fig7` monitor detectability frontier, `fig8` SOTA baselines, `fig9` monitor swapped in-pipeline, `fig10` budget-matched SOTA, `fig11` early-trigger × base-learner 2×2.
 
+**Full per-experiment analysis** (question · setup · numbers · figures · honest interpretation · caveats) lives in [docs/experiments/](docs/experiments/): [core run](docs/experiments/00-core-run.md) · [frequency control](docs/experiments/01-frequency-control.md) · [monitor ablation](docs/experiments/02-monitor-ablation.md) · [SOTA baselines](docs/experiments/03-sota-baselines.md) · [budget-matched SOTA](docs/experiments/03b-budget-matched.md) · [ensemble + anticipation](docs/experiments/03c-early-ensemble.md) · [resources & sensitivity](docs/experiments/04-resources-sensitivity.md).
+
 ## 9. Discussion
 
 Interpretation and limitations:
@@ -182,6 +196,7 @@ src/driftgan/
 └── viz/plots.py           # stream comparison, boxplots, RT CDF, Pareto
 configs/                 # base.yaml + one YAML per phase (core + reviewer/SOTA/ablation phases)
 scripts/                 # make_report.py; paper_figures.py, reviewer_analysis.py, monitor_ablation.py
+docs/                    # architecture.md, methodology.md, gan_design.md, figures/, experiments/*.md
 notebooks/               # 03_recovery_analysis, 05_early_detection (analysis only)
 tests/                   # pytest: recovery, schedule/triggers, early monitors, models, stats, augment, e2e
 run_experiment.py        # multi-seed CLI (also builds the schedule: --build-schedule)

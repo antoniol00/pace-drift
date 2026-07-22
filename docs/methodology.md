@@ -46,8 +46,8 @@ See `docs/gan_design.md` for architecture and ablations. Key protocol points:
 
 ## 6. Early detection (Improvement 6 — experimental)
 
-- Monitor: small autoencoder (in → 32 → 16 → 32 → in) fine-tuned every `monitor_interval = 5,000` samples for 5 epochs on a 2,000-sample buffer; the mean reconstruction error (buffer-standardized) forms a low-frequency signal.
-- `PHT_recon` (delta = 0.005) over that signal; `PHT_class` (delta = 0.002) over the 0/1 error as usual. Both trigger adaptation in C_early; fire sources are recorded.
+- Monitor: small autoencoder (in → 32 → 16 → 32 → in) fine-tuned every `monitor_interval = 1,000` samples for 5 epochs on a 2,000-sample buffer. The reconstruction error is measured against a **frozen reference scaler** (fixed on the first check) and **before** each fine-tune, so a covariate shift shows up as a *leading* spike; standardized inputs are clipped (`monitor_clip = 10`) to tame heavy-tailed features. This redesign replaced an earlier per-buffer standardization that cancelled the very signal being detected. Cheap ablations of this monitor (PCA / KS / MMD / mean-shift) share the identical protocol — see [experiments/02-monitor-ablation.md](experiments/02-monitor-ablation.md).
+- `PHT_recon` (delta = 0.0005, threshold = 0.1, calibrated offline on the persisted recon-error series) over that signal; `PHT_class` (delta = 0.002) over the 0/1 error as usual. Both trigger adaptation in C_early; fire sources are recorded.
 - **Lead time**: greedy pairing of each class fire with the nearest preceding unpaired recon fire within `lead_horizon = 20,000` samples. Reported: mean/distribution of lead times, anticipated-FP rate (recon fires never followed by a class fire within the horizon), missed-anticipation rate (class fires with no preceding recon fire).
 - Falsifiability: the hypothesis fails if lead times are ~0/negative-dominated or the anticipated-FP rate makes early adaptation more costly than the lead time is worth. The analysis notebook reports whichever outcome the data supports.
 

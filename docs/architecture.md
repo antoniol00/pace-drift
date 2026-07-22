@@ -1,0 +1,113 @@
+# Proposed architecture
+
+This document describes the architecture that all experiments share. The design
+goal is that **every phase runs through one prequential engine** and differs only
+in a few pluggable components, so any difference in results is attributable to
+those components and nothing else. Protocol-level detail (schedule construction,
+recovery-metric semantics, statistics) lives in [methodology.md](methodology.md);
+GAN internals in [gan_design.md](gan_design.md); the per-experiment results in
+[experiments/](experiments/).
+
+## 1. One engine, four pluggable slots
+
+`src/driftgan/experiments/runner.py:run_phase` is a single test-then-train
+(prequential) loop over the CICIDS2017 stream. A phase is a choice of four slots:
+
+| Slot | Options | Where |
+|---|---|---|
+| **Model** | Hoeffding Adaptive Tree · Adaptive Random Forest · Streaming Random Patches | `models/streaming.py:make_model` |
+| **Trigger** | none (frozen) · shared schedule · dynamic PHT · ADWIN/KSWIN detector · blind periodic clock · dual (recon+class) PHT · continuous (learn every sample) | `drift/schedule.py`, runner |
+| **Augmenter** | none · vanilla GAN · bootstrap+jitter · conditional WGAN-GP | `augment/`, `_make_augmenter` |
+| **Monitor** | none · autoencoder · PCA reconstruction · KS · MMD · mean-shift | `early/`, `_make_monitor` |
+
+```mermaid
+flowchart LR
+    S[CSV stream] --> P[preprocess row]
+    P --> M[model.predict_one]
+    M --> E[0/1 error + rolling F1]
+    E --> T{trigger?}
+    T -- "frozen (A)" --> S
+    T -- "schedule / PHT / ADWIN / KSWIN / periodic" --> W[open retrain window]
+    T -- "dual recon+class PHT (early)" --> W
+    T -- "continuous (ARF/SRP)" --> W
+    W --> G{augmenter?}
+    G -- "GAN / cGAN / jitter" --> A2[learn_one on synthetic ATTACK]
+    G -- "none" --> LW[learn_one on real samples in window]
+    A2 --> LW
+    LW --> S
+    subgraph monitor [background monitor, early phases]
+      MO[reconstruction / shift score] --> RP[PHT_recon] --> T
+    end
+```
+
+The loop only calls `model.learn_one` **inside a triggered window** (except the
+continuous ARF/SRP phases, which learn on every sample). This is the key design
+decision behind the whole study: adaptation is a *scarce, triggered* action, so
+the interesting questions are **when to adapt** and **how good a single adaptation
+is** — not "keep learning forever".
+
+## 2. Components
+
+### Models (`models/`)
+- **Hoeffding Adaptive Tree (HAT)** — the single-tree base learner used by the
+  core phases; identical hyper-parameters across phases (`models/hat.py`).
+- **Adaptive Random Forest (ARF)** and **Streaming Random Patches (SRP)** —
+  state-of-the-art streaming ensembles, dispatched by phase-name prefix so that
+  budget-matched (`*_sched`) and early-triggered (`*_early`) variants reuse them
+  (`models/streaming.py`).
+
+### Triggers (`drift/schedule.py`)
+- `ScheduledDriftTrigger` — replays a fixed list of indices (the shared schedule)
+  so scheduled phases adapt at identical events and can be paired event-by-event.
+- `DynamicPHTTrigger` — a live Page-Hinkley test on the 0/1 error.
+- `DynamicDetectorTrigger` — the same idea generalised to any river detector
+  (ADWIN, KSWIN).
+- `PeriodicTrigger` — a blind fixed-period clock (the frequency-matched control).
+- `DualPHT` (`early/dual_pht.py`) — two Page-Hinkley tests, one on the classifier
+  error (reactive) and one on the monitor's score (**anticipatory**); either can
+  fire adaptation, and the pairing of the two fire streams yields the lead-time
+  analysis.
+
+### Augmenters (`augment/`)
+Drift-time synthetic-sample generators, all behind one `fit_generate` protocol
+with self-reported `t_train`/`t_generate` cost. `FeatureScaler` (in `base.py`)
+standardises features before generation and inverts afterwards — the fix that
+made the vanilla and conditional GANs stop collapsing to identical output.
+
+### Monitors (`early/`)
+Background covariate-shift detectors sharing one protocol: a **frozen reference
+frame** set on the first check, then, on every later check, **score before
+updating the reference** so a distribution change shows up as a *leading* spike.
+The autoencoder (`reconstruction_monitor.py`) is the original proposal;
+`shift_monitors.py` adds cheap ablations (PCA reconstruction, KS, MMD,
+mean-shift) with the identical protocol so the generative model can be isolated.
+
+### Metrics (`metrics/`)
+Rolling O(1) F1, per-event recovery (RT / AUD / min-F1 / no-recovery with
+explicit handling of F1-undefined windows), and a cost tracker (per-sample
+latency percentiles + named component sections + RSS). See
+[methodology.md](methodology.md) §2 and §7.
+
+## 3. Phase taxonomy
+
+Fifteen phases, grouped by what they establish. (`configs/phase_*.yaml`, one YAML
+per phase, merged over `configs/base.yaml`.)
+
+| Group | Phases | Model | Trigger | Purpose |
+|---|---|---|---|---|
+| Core proposals & controls | A, B, C, C', C_cond, C_early | HAT | none / PHT / dual | the original study |
+| Frequency control | C_freq | HAT | periodic | timing vs frequency (#1) |
+| Monitor ablation | C_early_mean, C_early_pca | HAT | dual, cheap monitor | is the AE justified (#2) |
+| Drift-detector baselines | B_adwin, B_kswin | HAT | ADWIN / KSWIN | detector choice (#3) |
+| SOTA ensembles | ARF, SRP | ensemble | continuous | upper bound (#3) |
+| Budget-matched SOTA | ARF_sched, SRP_sched | ensemble | schedule | capacity vs supervision (#3b) |
+| Ensemble + anticipation | ARF_early, SRP_early | ensemble | dual | does the early trigger help SOTA (#3c) |
+
+## 4. Reproducibility
+
+Every `(phase, seed)` run writes `results/runs/<phase>/seed_<n>/` with a
+`manifest.json` (git commit, config hash, CSV SHA-256, package versions),
+`snapshots.parquet` (rolling F1/acc every 500 samples), `drift_events.json`,
+`cost.json`, `trace.csv.gz`, and a per-event recovery parquet under
+`results/recovery/`. Seeds fix `random`/`numpy`/`torch`/model/augmenter. Config
+lives entirely in YAML — no experiment constant is hard-coded in a module.
