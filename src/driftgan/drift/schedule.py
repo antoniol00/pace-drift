@@ -94,14 +94,15 @@ def build_schedule_from_labels(
     labels: list[str] | Any,
     min_gap: int = 5_000,
     n_pretrain: int = 0,
+    benign_label: str = BENIGN,
 ) -> DriftSchedule:
     """Derive a ground-truth schedule from raw subtype labels of the stream.
 
     An event is recorded at the index of the first sample of each new
-    non-BENIGN subtype block: i.e. whenever a non-benign label appears whose
+    non-benign subtype block: i.e. whenever a non-benign label appears whose
     subtype differs from the last non-benign subtype seen. Consecutive
     events closer than ``min_gap`` samples are merged (only the first is
-    kept), so short interleavings of BENIGN traffic inside one attack burst
+    kept), so short interleavings of benign traffic inside one attack burst
     do not produce spurious events.
 
     Parameters
@@ -114,12 +115,14 @@ def build_schedule_from_labels(
     n_pretrain : int
         Events inside the pre-training prefix are skipped (the model is
         openly trained there; there is nothing to adapt to).
+    benign_label : str
+        The label value representing benign/normal traffic (default: "BENIGN").
     """
     indices: list[int] = []
     last_subtype: str | None = None
     last_event = -min_gap
     for i, y_raw in enumerate(labels):
-        if y_raw == BENIGN:
+        if y_raw == benign_label:
             continue
         if y_raw != last_subtype:
             last_subtype = y_raw
@@ -129,7 +132,7 @@ def build_schedule_from_labels(
     return DriftSchedule(
         indices=indices,
         source="labels",
-        metadata={"min_gap": min_gap, "n_pretrain": n_pretrain},
+        metadata={"min_gap": min_gap, "n_pretrain": n_pretrain, "benign_label": benign_label},
     )
 
 
