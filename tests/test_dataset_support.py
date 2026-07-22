@@ -35,3 +35,41 @@ def test_schedule_from_labels_default_benign_unchanged():
     labels = ["BENIGN"] * 5 + ["DoS"] * 2 + ["BENIGN"] * 5 + ["DDoS"] * 2
     sched = build_schedule_from_labels(labels, min_gap=1, n_pretrain=0)
     assert sched.indices == [5, 12]
+
+
+from driftgan import config as cfg_mod
+from driftgan.config import ExperimentConfig, load_config
+
+
+def test_config_defaults_dataset_and_benign():
+    c = ExperimentConfig(phase="B")
+    assert c.dataset == "cicids2017"
+    assert c.benign_label == "BENIGN"
+
+
+def test_run_dir_flat_for_default_dataset():
+    c = ExperimentConfig(phase="B", results_dir="/tmp/r")
+    assert c.run_dir(0).as_posix().endswith("/runs/B/seed_0")
+
+
+def test_run_dir_namespaced_for_named_dataset():
+    c = ExperimentConfig(phase="B", dataset="cicids2018", results_dir="/tmp/r")
+    assert c.run_dir(0).as_posix().endswith("/runs/cicids2018/B/seed_0")
+
+
+def test_load_config_dataset_layer_overrides_phase(tmp_path, monkeypatch):
+    configs = tmp_path / "configs"
+    (configs / "datasets").mkdir(parents=True)
+    (configs / "base.yaml").write_text("recon_pht_threshold: 2.0\nstart_row: 0\n")
+    (configs / "datasets" / "ds.yaml").write_text(
+        "dataset: ds\ncsv_path: /x.csv\ntarget_col: Label\n"
+        "benign_label: Benign\nrecon_pht_threshold: 0.05\n"
+    )
+    phase_yaml = configs / "phase_c_early.yaml"
+    phase_yaml.write_text("phase: C_early\nrecon_pht_threshold: 0.1\n")
+    monkeypatch.setattr(cfg_mod, "CONFIGS_DIR", configs)
+    c = load_config(phase_yaml, dataset="ds")
+    assert c.dataset == "ds"
+    assert c.benign_label == "Benign"
+    assert c.csv_path == "/x.csv"
+    assert c.recon_pht_threshold == 0.05  # dataset layer overrides the phase default

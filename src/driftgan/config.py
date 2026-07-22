@@ -41,6 +41,10 @@ class ExperimentConfig:
 
     phase: str
 
+    # Dataset identity
+    dataset: str = "cicids2017"  # names configs/datasets/<dataset>.yaml; also namespaces results
+    benign_label: str = "BENIGN"  # raw benign class string for this dataset
+
     # Dataset / stream
     csv_path: str = "/mnt/AI-DATA-SSD/alara/Data/CIC-IDS2017.csv"
     drop_cols: tuple[str, ...] = ("Flow ID", "Source IP", "Destination IP", "Timestamp")
@@ -122,9 +126,13 @@ class ExperimentConfig:
         blob = json.dumps(self.resolved_dict(), sort_keys=True).encode()
         return hashlib.sha256(blob).hexdigest()[:12]
 
+    def _ns_segments(self) -> tuple[str, ...]:
+        """Result-path segment for the dataset (empty for the 2017 anchor)."""
+        return () if self.dataset == "cicids2017" else (self.dataset,)
+
     def run_dir(self, seed: int) -> Path:
         """Directory where artifacts of (phase, seed) are written."""
-        return Path(self.results_dir) / "runs" / self.phase / f"seed_{seed}"
+        return Path(self.results_dir).joinpath("runs", *self._ns_segments(), self.phase, f"seed_{seed}")
 
 
 def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
@@ -137,7 +145,11 @@ def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any
     return merged
 
 
-def load_config(path: str | Path, overrides: dict[str, Any] | None = None) -> ExperimentConfig:
+def load_config(
+    path: str | Path,
+    overrides: dict[str, Any] | None = None,
+    dataset: str | None = None,
+) -> ExperimentConfig:
     """Load a phase YAML, merging it on top of ``configs/base.yaml`` if present.
 
     Parameters
@@ -146,6 +158,9 @@ def load_config(path: str | Path, overrides: dict[str, Any] | None = None) -> Ex
         Phase configuration YAML. Must contain at least ``phase:``.
     overrides : dict, optional
         Final overrides applied on top (e.g. from CLI flags).
+    dataset : str, optional
+        Dataset name; if provided, loads ``configs/datasets/<dataset>.yaml``
+        and merges it after the phase layer (dataset overrides phase).
     """
     path = Path(path)
     with open(path, encoding="utf-8") as f:
@@ -157,9 +172,20 @@ def load_config(path: str | Path, overrides: dict[str, Any] | None = None) -> Ex
         with open(base_path, encoding="utf-8") as f:
             base_cfg = yaml.safe_load(f) or {}
 
+    dataset_cfg: dict[str, Any] = {}
+    if dataset and dataset != "cicids2017":
+        ds_path = CONFIGS_DIR / "datasets" / f"{dataset}.yaml"
+        if not ds_path.exists():
+            raise FileNotFoundError(f"dataset profile not found: {ds_path}")
+        with open(ds_path, encoding="utf-8") as f:
+            dataset_cfg = yaml.safe_load(f) or {}
+
     merged = _deep_merge(base_cfg, phase_cfg)
+    merged = _deep_merge(merged, dataset_cfg)  # dataset overrides phase (per-dataset calibration)
     if overrides:
         merged = _deep_merge(merged, overrides)
+    if dataset:
+        merged["dataset"] = dataset  # the --dataset flag is authoritative
 
     if "drop_cols" in merged:
         merged["drop_cols"] = tuple(merged["drop_cols"])
