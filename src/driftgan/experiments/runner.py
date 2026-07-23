@@ -256,6 +256,7 @@ def run_phase(
         target_col=config.target_col,
         start_row=config.start_row,
         max_rows=config.max_samples,
+        benign_label=config.benign_label,
     )
 
     # ── pre-training ─────────────────────────────────────────────────
@@ -447,7 +448,7 @@ def _write_outputs(config: ExperimentConfig, result: RunResult, tracker: CostTra
         k=config.recovery_k,
         horizon=config.recovery_horizon,
     )
-    save_recovery(events, result.phase, result.seed, config.results_dir)
+    save_recovery(events, result.phase, result.seed, config.results_dir, dataset=config.dataset)
 
     summary = {
         "phase": result.phase,
