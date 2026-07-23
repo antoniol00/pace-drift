@@ -79,6 +79,8 @@ def main() -> None:
     parser.add_argument("--build-schedule", action="store_true",
                         help="Run pass 0 (Phase B dynamics) and write the schedule to --out")
     parser.add_argument("--out", type=Path, help="Output path for --build-schedule")
+    parser.add_argument("--dataset", default="cicids2017",
+                        help="Dataset profile in configs/datasets/<name>.yaml (default: cicids2017)")
     args = parser.parse_args()
 
     overrides: dict[str, Any] = {}
@@ -89,7 +91,7 @@ def main() -> None:
 
     if args.build_schedule:
         config_path = args.config or CONFIGS_DIR / "phase_b.yaml"
-        config = _fit_pretrain(load_config(config_path, overrides))
+        config = _fit_pretrain(load_config(config_path, overrides, dataset=args.dataset))
         out = args.out or Path(config.results_dir) / "drift_schedule.json"
         from driftgan.drift.schedule import build_schedule_from_pht
 
@@ -101,7 +103,7 @@ def main() -> None:
     if not args.phase:
         parser.error("--phase is required unless --build-schedule is given")
     config_path = args.config or CONFIGS_DIR / PHASE_CONFIG[args.phase]
-    config = _fit_pretrain(load_config(config_path, overrides))
+    config = _fit_pretrain(load_config(config_path, overrides, dataset=args.dataset))
     if config.phase != args.phase:
         parser.error(f"config {config_path} declares phase {config.phase!r}, but --phase is {args.phase!r}")
 

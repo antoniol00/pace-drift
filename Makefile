@@ -1,5 +1,6 @@
 SEEDS ?= 0,1,2,3,4
 N_JOBS ?= 5
+NJOBS ?= $(N_JOBS)
 SCHEDULE ?= results/drift_schedule.json
 
 .PHONY: setup test lint typecheck smoke schedule run-A run-B run-C run-C-prime run-C-cond run-C-early run-all report clean-results
@@ -71,3 +72,35 @@ report:
 
 clean-results:
 	rm -rf results/runs results/recovery results/report results/plots
+
+# ── External-validity datasets (#4): 2018 + UNSW ──────────────────────
+DATA2018 ?= cicids2018
+DATAUNSW ?= unsw
+MINPHASES = C_early ARF_early SRP_early
+SCHEDPHASES = B ARF_sched SRP_sched
+
+schedule-2018:
+	uv run python run_experiment.py --build-schedule --dataset $(DATA2018) \
+		--config configs/phase_b.yaml --out results/drift_schedule_$(DATA2018).json
+
+schedule-unsw:
+	uv run python run_experiment.py --build-schedule --dataset $(DATAUNSW) \
+		--config configs/phase_b.yaml --out results/drift_schedule_$(DATAUNSW).json
+
+run-min-2018:
+	@for p in $(SCHEDPHASES); do \
+		uv run python run_experiment.py --phase $$p --dataset $(DATA2018) \
+			--drift-schedule results/drift_schedule_$(DATA2018).json \
+			--seeds $(SEEDS) --n-jobs $(NJOBS); done
+	@for p in $(MINPHASES); do \
+		uv run python run_experiment.py --phase $$p --dataset $(DATA2018) \
+			--seeds $(SEEDS) --n-jobs $(NJOBS); done
+
+run-min-unsw:
+	@for p in $(SCHEDPHASES); do \
+		uv run python run_experiment.py --phase $$p --dataset $(DATAUNSW) \
+			--drift-schedule results/drift_schedule_$(DATAUNSW).json \
+			--seeds $(SEEDS) --n-jobs $(NJOBS); done
+	@for p in $(MINPHASES); do \
+		uv run python run_experiment.py --phase $$p --dataset $(DATAUNSW) \
+			--seeds $(SEEDS) --n-jobs $(NJOBS); done
