@@ -111,8 +111,11 @@ CSV path, target/benign-label strings, dropped identifier columns, the
 drift-rich evaluation window (`start_row`/`max_samples`), and the monitor's
 recon Page-Hinkley threshold — lives in a per-dataset YAML profile
 (`configs/datasets/<name>.yaml`), selected by a `--dataset <name>` flag on
-`run_experiment.py` and merged `base.yaml ← configs/datasets/<name>.yaml ←
-phase yaml ← CLI` (`config.py`). Results are namespaced by dataset —
+`run_experiment.py` and merged `base.yaml ← phase yaml ←
+configs/datasets/<name>.yaml ← CLI` (`config.py`) — the dataset profile is the
+most-specific non-CLI layer, so it overrides a phase yaml's defaults (e.g. a
+per-dataset monitor threshold wins over the phase's calibrated-on-2017 value).
+Results are namespaced by dataset —
 `results/runs/<dataset>/<phase>/seed_<n>/` and
 `results/recovery/<dataset>_<phase>_<seed>.parquet` — except the default
 `cicids2017`, which keeps the original flat paths
