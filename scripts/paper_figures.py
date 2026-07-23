@@ -691,9 +691,9 @@ def fig12_external_validity() -> None:
     fig.suptitle("Does the proactive early trigger generalize across datasets?",
                  fontsize=12, fontweight="bold")
     fig.text(0.5, 0.01, "Δ above each pair = gain from swapping reactive -> proactive "
-             "early trigger, per dataset.\nBlank panels: dataset runs not yet complete "
-             "(5/5 seeds required per cell).", ha="center", va="bottom", fontsize=8.5,
-             color="#555")
+             "early trigger, holding the model fixed.\nPositive in all 9 cells "
+             "(3 datasets x 3 base learners): the anticipation signal generalizes.",
+             ha="center", va="bottom", fontsize=8.5, color="#555")
     fig.subplots_adjust(top=0.80, bottom=0.20)
     fig.savefig(OUT / "fig12_external_validity.png")
     plt.close(fig)
