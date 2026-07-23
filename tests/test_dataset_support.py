@@ -3,6 +3,7 @@ from driftgan import config as cfg_mod
 from driftgan.config import ExperimentConfig, load_config
 from driftgan.data.stream import ATTACK, BENIGN, preprocess_row
 from driftgan.drift.schedule import build_schedule_from_labels
+from driftgan.metrics.recovery import save_recovery
 
 
 def test_preprocess_row_custom_benign_label():
@@ -71,3 +72,13 @@ def test_load_config_dataset_layer_overrides_phase(tmp_path, monkeypatch):
     assert c.benign_label == "Benign"
     assert c.csv_path == "/x.csv"
     assert c.recon_pht_threshold == 0.05  # dataset layer overrides the phase default
+
+
+def test_save_recovery_flat_for_default(tmp_path):
+    p = save_recovery([], "B", 0, tmp_path)
+    assert p.name == "B_0.parquet"
+
+
+def test_save_recovery_namespaced(tmp_path):
+    p = save_recovery([], "B", 0, tmp_path, dataset="cicids2018")
+    assert p.name == "cicids2018_B_0.parquet"

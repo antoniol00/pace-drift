@@ -171,11 +171,22 @@ def events_to_dataframe(events: list[RecoveryEvent]) -> pd.DataFrame:
     return df
 
 
-def save_recovery(events: list[RecoveryEvent], phase: str, seed: int, results_dir: str | Path) -> Path:
-    """Write ``results/recovery/{phase}_{seed}.parquet`` and return its path."""
+def save_recovery(
+    events: list[RecoveryEvent],
+    phase: str,
+    seed: int,
+    results_dir: str | Path,
+    dataset: str = "cicids2017",
+) -> Path:
+    """Write ``results/recovery/{prefix}{phase}_{seed}.parquet`` and return its path.
+
+    ``prefix`` is empty for the 2017 anchor and ``{dataset}_`` otherwise, so
+    per-dataset recovery frames never collide with the existing 2017 outputs.
+    """
     out_dir = Path(results_dir) / "recovery"
     out_dir.mkdir(parents=True, exist_ok=True)
-    path = out_dir / f"{phase}_{seed}.parquet"
+    prefix = "" if dataset == "cicids2017" else f"{dataset}_"
+    path = out_dir / f"{prefix}{phase}_{seed}.parquet"
     events_to_dataframe(events).to_parquet(path, index=False)
     return path
 
