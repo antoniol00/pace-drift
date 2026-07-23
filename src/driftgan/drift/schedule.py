@@ -14,7 +14,7 @@ Two schedule sources are provided:
   experiments.
 - ``build_schedule_from_labels``: a ground-truth schedule derived from the
   attack-subtype transitions in the CSV labels: an event is recorded at the
-  first sample of each new non-BENIGN subtype block (subject to a minimum
+  first sample of each new non-benign subtype block (subject to a minimum
   gap between events). This is independent of any model and serves as a
   complementary reference.
 

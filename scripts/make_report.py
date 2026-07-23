@@ -56,6 +56,14 @@ def main() -> None:
         print("no runs found — run experiments first")
         return
 
+    # recovery/*.parquet is a flat dir shared across dataset namespaces
+    # (cicids2018_*/unsw_* filenames are prefixed; the 2017 anchor is not).
+    # This report is 2017-anchor only, so keep only the phases that actually
+    # appear in the (already anchor-only) run summaries before anything
+    # downstream — Wilcoxon and the boxplot/CDF figures — sees the dict.
+    anchor_phases = set(summaries["phase"].astype(str))
+    recovery = {phase: df for phase, df in recovery.items() if phase in anchor_phases}
+
     # ── summary table ────────────────────────────────────────────────
     rows = []
     for phase, group in summaries.groupby("phase"):
