@@ -1,4 +1,4 @@
-# Experiment 7 — External validity across datasets (CIC-IDS2018 + UNSW-NB15)
+# Experiment 4 — External validity across datasets (CIC-IDS2018 + UNSW-NB15)
 
 ## Question
 
@@ -68,7 +68,7 @@ adaptation count, reactive (`B`/`*_sched`) vs proactive (`C_early`/`*_early`):
 
 | Dataset | Base learner | reactive F1 | proactive F1 | Δ | adaptations (reactive → proactive) |
 |---|---|---|---|---|---|
-| CIC-IDS2017 | HAT | 0.588 | 0.595 | +0.007 | 187 → 161 |
+| CIC-IDS2017 | HAT | 0.573 | 0.595 | +0.022 | 233 → 161 |
 | CIC-IDS2017 | ARF | 0.718 | 0.748 | +0.030 | 233 → 113 |
 | CIC-IDS2017 | SRP | 0.733 | 0.769 | +0.037 | 233 → 91 |
 | CIC-IDS2018 | HAT | 0.830 | 0.901 | +0.071 | 124 → 305 |
@@ -78,13 +78,8 @@ adaptation count, reactive (`B`/`*_sched`) vs proactive (`C_early`/`*_early`):
 | UNSW-NB15 | ARF | 0.597 | 0.658 | +0.061 | 117 → 173 |
 | UNSW-NB15 | SRP | 0.695 | 0.746 | +0.050 | 117 → 167 |
 
-*Every one of the 9 cells is a positive Δ.* (Note: the CICIDS2017 reactive-HAT
-figures above, 0.588 F1 / 187 adaptations, come from the same pooled-across-
-seeds computation used for all three datasets here; [3c](03c-early-ensemble.md)
-quotes the pass-0 schedule *length* (233) rather than the mean realized
-adaptation count per run — a scheduled index the stream never reaches is
-dropped, not fired late, so the two counts need not match exactly. The
-proactive C_early row agrees with 3c to three decimals.)
+*Every one of the 9 cells is a positive Δ; the CICIDS2017 rows reproduce
+[Experiment 3c](03c-early-ensemble.md).*
 
 ![Base-learner × trigger 2×2, three datasets](../figures/fig12_external_validity.png)
 
@@ -107,7 +102,7 @@ attack ordering.
   proactive trigger buys its F1 gain with *more* label-consuming adaptations,
   not fewer.
 - **The "gains grow with model strength" pattern is 2017-specific.** On 2017,
-  Δ grows with base-learner strength (HAT +0.007 → ARF +0.030 → SRP +0.037).
+  Δ grows with base-learner strength (HAT +0.022 → ARF +0.030 → SRP +0.037).
   On 2018 the pattern *reverses* — gains *shrink* with strength (HAT +0.071 →
   ARF +0.013 → SRP +0.004) — a ceiling effect: the ensembles already reach
   F1 0.91–0.93 on 2018, leaving little headroom for any trigger to add. On

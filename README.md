@@ -177,7 +177,7 @@ proactive trigger uses *fewer* adaptations than the reactive schedule, but on
 budget" is a 2017-specific finding, not universal; likewise 2017's
 "gains grow with model strength" pattern reverses on 2018 (a ceiling effect —
 the ensembles already sit at F1 0.91–0.93 there). See
-[experiment 7](docs/experiments/05-external-validity.md) for the full tables,
+[experiment 4](docs/experiments/05-external-validity.md) for the full tables,
 setup and caveats.
 
 ![External validity across datasets](docs/figures/fig12_external_validity.png)

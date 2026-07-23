@@ -118,7 +118,7 @@ phase yaml ← CLI` (`config.py`). Results are namespaced by dataset —
 `cicids2017`, which keeps the original flat paths
 (`results/runs/<phase>/seed_<n>/`, `results/recovery/<phase>_<seed>.parquet`)
 so existing 2017 results are neither moved nor rerun. See
-[experiment 7](experiments/05-external-validity.md) for the two profiles
+[experiment 4](experiments/05-external-validity.md) for the two profiles
 (`cicids2018.yaml`, `unsw.yaml`) built on this slot.
 
 ## 4. Reproducibility
