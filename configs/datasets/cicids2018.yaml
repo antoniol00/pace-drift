@@ -1,0 +1,18 @@
+# CIC-IDS2018 profile (#4 external validity). CICFlowMeter feature family
+# (same as 2017); natural bursty drift.
+#
+# Window chosen by scripts/scan_drift_window.py (bucket=250000): rows 0-1M hold
+# only 2 attack types, then a ~7M-row benign desert (rows 1M-8.25M), then a
+# diverse attack sequence from ~9.25M-14.75M. The window below (11M-14M) spans
+# the richest block: DoS-Hulk, Infilteration, DDOS-HOIC, DDOS-LOIC-UDP, Bot,
+# FTP-BruteForce, SSH-Bruteforce arriving in blocks separated by benign -> many
+# drift events. The first 50K (DoS-Hulk, ~48% attack) gives a balanced pretrain.
+dataset: cicids2018
+csv_path: /mnt/AI-DATA-SSD/alara/Data/CIC-IDS2018.csv
+target_col: Label
+benign_label: Benign
+drop_cols: ["Timestamp"]   # no Flow ID / IP columns in 2018; keep Dst Port / Protocol
+start_row: 11000000
+max_samples: 3000000
+n_pretrain: 50000
+# monitor thresholds recalibrated per dataset in Task 8 (appended there)

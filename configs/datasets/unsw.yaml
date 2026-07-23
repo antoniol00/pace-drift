@@ -1,0 +1,21 @@
+# UNSW-NB15 profile (#4 external validity). This CSV is a CICFlowMeter
+# re-extraction of UNSW-NB15 (same ~80-feature family as 2017), not the classic
+# 49-feature Argus/Bro set; it contributes a genuinely different attack taxonomy
+# (Fuzzers, Exploits, Reconnaissance, Generic, DoS, Shellcode, Backdoor,
+# Analysis, Worms).
+#
+# Window chosen by scripts/scan_drift_window.py (bucket=250000): rows 0-500K and
+# 1.75M-3.48M are attack-bearing (~4-5%), with a pure-benign desert in between
+# (500K-1.5M). The window below (1.75M-3.45M) is the dense second half where all
+# 9 attack families burst on a benign background. Note: the attack-type mix is
+# fairly stationary across this region, so the drift is mainly benign<->attack
+# bursts rather than attack-type turnover (stated as a caveat in the write-up).
+dataset: unsw
+csv_path: /mnt/AI-DATA-SSD/alara/Data/UNSW-NB15.csv
+target_col: Label
+benign_label: Benign
+drop_cols: ["Flow ID", "Src IP", "Dst IP", "Src Port", "Timestamp"]  # keep Dst Port / Protocol
+start_row: 1750000
+max_samples: 1700000
+n_pretrain: 50000
+# monitor thresholds recalibrated per dataset in Task 8 (appended there)
