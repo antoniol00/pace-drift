@@ -1,4 +1,6 @@
 """Multi-dataset support: benign-label threading, config layering, namespacing."""
+from driftgan import config as cfg_mod
+from driftgan.config import ExperimentConfig, load_config
 from driftgan.data.stream import ATTACK, BENIGN, preprocess_row
 from driftgan.drift.schedule import build_schedule_from_labels
 
@@ -35,10 +37,6 @@ def test_schedule_from_labels_default_benign_unchanged():
     labels = ["BENIGN"] * 5 + ["DoS"] * 2 + ["BENIGN"] * 5 + ["DDoS"] * 2
     sched = build_schedule_from_labels(labels, min_gap=1, n_pretrain=0)
     assert sched.indices == [5, 12]
-
-
-from driftgan import config as cfg_mod
-from driftgan.config import ExperimentConfig, load_config
 
 
 def test_config_defaults_dataset_and_benign():
