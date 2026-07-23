@@ -18,4 +18,9 @@ drop_cols: ["Flow ID", "Src IP", "Dst IP", "Src Port", "Timestamp"]  # keep Dst 
 start_row: 1750000
 max_samples: 1700000
 n_pretrain: 50000
-# monitor thresholds recalibrated per dataset in Task 8 (appended there)
+# monitor calibration (Task 8): 200K C_early smoke with the ported 0.1 threshold
+# fired 25 adaptations (14 recon / 11 class), mean anticipation lead ~6.3K samples,
+# recon-error spiking 0.5->3.0 at burst onsets -> the 2017 value generalizes here.
+# Pinned so ARF_early / SRP_early use the same calibrated monitor on this dataset.
+recon_pht_threshold: 0.1
+recon_pht_delta: 0.0005

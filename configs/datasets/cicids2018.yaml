@@ -15,4 +15,10 @@ drop_cols: ["Timestamp"]   # no Flow ID / IP columns in 2018; keep Dst Port / Pr
 start_row: 11000000
 max_samples: 3000000
 n_pretrain: 50000
-# monitor thresholds recalibrated per dataset in Task 8 (appended there)
+# monitor calibration (Task 8): 1M C_early smoke with the ported 0.1 threshold
+# fired 185 adaptations (72 recon / 113 class), mean anticipation lead ~3.2K
+# samples, recon-error spiking to 2.9. Mean local F1 ~0.74 with 448/1147 valid
+# windows < 0.9 (dips at the Infiltration/Bot blocks) -> window is drift-rich, not
+# a flat ceiling. Pinned so ARF_early / SRP_early share the same calibrated monitor.
+recon_pht_threshold: 0.1
+recon_pht_delta: 0.0005
