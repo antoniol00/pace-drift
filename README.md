@@ -159,9 +159,30 @@ Full 5-seed run over the ~2M-sample stream (`make report` → `results/report/`;
 
 So proactive generative-monitor-triggered adaptation is **not a crutch for a weak base learner** — it improves the SOTA ensemble too, and more label-efficiently (SRP reaches 0.769 sustained F1 with only 91 adaptations, approaching continuous SRP's 0.811 at ~2M updates). This is the paper's constructive result: the early monitor is a cheap, model-agnostic add-on that raises sustained detection quality at a fraction of the adaptation budget.
 
-Figures: `fig1` local-F1 trajectory, `fig2` recovery comparison, `fig3` lead-time & cost/benefit, `fig4` resource/latency profile, `fig5` operating-point sensitivity, `fig6` frequency-control ablation, `fig7` monitor detectability frontier, `fig8` SOTA baselines, `fig9` monitor swapped in-pipeline, `fig10` budget-matched SOTA, `fig11` early-trigger × base-learner 2×2.
+Figures: `fig1` local-F1 trajectory, `fig2` recovery comparison, `fig3` lead-time & cost/benefit, `fig4` resource/latency profile, `fig5` operating-point sensitivity, `fig6` frequency-control ablation, `fig7` monitor detectability frontier, `fig8` SOTA baselines, `fig9` monitor swapped in-pipeline, `fig10` budget-matched SOTA, `fig11` early-trigger × base-learner 2×2, `fig12` external-validity 2×2 across datasets.
 
-**Full per-experiment analysis** (question · setup · numbers · figures · honest interpretation · caveats) lives in [docs/experiments/](docs/experiments/): [core run](docs/experiments/00-core-run.md) · [frequency control](docs/experiments/01-frequency-control.md) · [monitor ablation](docs/experiments/02-monitor-ablation.md) · [SOTA baselines](docs/experiments/03-sota-baselines.md) · [budget-matched SOTA](docs/experiments/03b-budget-matched.md) · [ensemble + anticipation](docs/experiments/03c-early-ensemble.md) · [resources & sensitivity](docs/experiments/04-resources-sensitivity.md).
+### External validity (CIC-IDS2018 + UNSW-NB15)
+
+The 3c result — the proactive early trigger beats the reactive schedule for
+every base learner — was tested on two more naturally-drifting
+CICFlowMeter-family datasets (5 seeds each, the same minimal
+B/C_early/ARF_sched/ARF_early/SRP_sched/SRP_early 2×2 as 2017; dataset choice
+was evidence-driven — a label-ordering diagnostic rejected two IoT candidates
+as either fully shuffled or class-sorted with no genuine drift to
+anticipate). **The direction holds in all 9 (dataset × base-learner) cells**:
+proactive overall local F1 beats reactive for HAT, ARF and SRP on CICIDS2017,
+CIC-IDS2018 and UNSW-NB15 alike. What does *not* generalize: on 2017 the
+proactive trigger uses *fewer* adaptations than the reactive schedule, but on
+2018/UNSW it fires *more* — so "the same gain at a fraction of the adaptation
+budget" is a 2017-specific finding, not universal; likewise 2017's
+"gains grow with model strength" pattern reverses on 2018 (a ceiling effect —
+the ensembles already sit at F1 0.91–0.93 there). See
+[experiment 7](docs/experiments/05-external-validity.md) for the full tables,
+setup and caveats.
+
+![External validity across datasets](docs/figures/fig12_external_validity.png)
+
+**Full per-experiment analysis** (question · setup · numbers · figures · honest interpretation · caveats) lives in [docs/experiments/](docs/experiments/): [core run](docs/experiments/00-core-run.md) · [frequency control](docs/experiments/01-frequency-control.md) · [monitor ablation](docs/experiments/02-monitor-ablation.md) · [SOTA baselines](docs/experiments/03-sota-baselines.md) · [budget-matched SOTA](docs/experiments/03b-budget-matched.md) · [ensemble + anticipation](docs/experiments/03c-early-ensemble.md) · [resources & sensitivity](docs/experiments/04-resources-sensitivity.md) · [external validity](docs/experiments/05-external-validity.md).
 
 ## 9. Discussion
 

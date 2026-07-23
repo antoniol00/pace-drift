@@ -103,6 +103,24 @@ per phase, merged over `configs/base.yaml`.)
 | Budget-matched SOTA | ARF_sched, SRP_sched | ensemble | schedule | capacity vs supervision (#3b) |
 | Ensemble + anticipation | ARF_early, SRP_early | ensemble | dual | does the early trigger help SOTA (#3c) |
 
+### Dataset profiles (`configs/datasets/`)
+The engine itself is dataset-agnostic: feature dimensionality/order is
+inferred from the first row's keys, and `models/`, `drift/`, `augment/`,
+`early/` never hardcode a column name or count. What *is* dataset-specific —
+CSV path, target/benign-label strings, dropped identifier columns, the
+drift-rich evaluation window (`start_row`/`max_samples`), and the monitor's
+recon Page-Hinkley threshold — lives in a per-dataset YAML profile
+(`configs/datasets/<name>.yaml`), selected by a `--dataset <name>` flag on
+`run_experiment.py` and merged `base.yaml ← configs/datasets/<name>.yaml ←
+phase yaml ← CLI` (`config.py`). Results are namespaced by dataset —
+`results/runs/<dataset>/<phase>/seed_<n>/` and
+`results/recovery/<dataset>_<phase>_<seed>.parquet` — except the default
+`cicids2017`, which keeps the original flat paths
+(`results/runs/<phase>/seed_<n>/`, `results/recovery/<phase>_<seed>.parquet`)
+so existing 2017 results are neither moved nor rerun. See
+[experiment 7](experiments/05-external-validity.md) for the two profiles
+(`cicids2018.yaml`, `unsw.yaml`) built on this slot.
+
 ## 4. Reproducibility
 
 Every `(phase, seed)` run writes `results/runs/<phase>/seed_<n>/` with a
