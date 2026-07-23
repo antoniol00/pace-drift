@@ -320,6 +320,47 @@ def _local_f1_by_segment(phase: str, edges: list[float]) -> tuple[list, list]:
     return means, overall
 
 
+def _run_dir(dataset: str, phase: str, seed: int) -> Path:
+    """Result directory for (dataset, phase, seed).
+
+    Mirrors the runner's dataset namespacing (``Config._ns_segments``): flat
+    ``RUNS/phase/seed_n`` for the ``cicids2017`` anchor, ``RUNS/dataset/phase/seed_n``
+    for every other dataset.
+    """
+    base = RUNS if dataset == "cicids2017" else RUNS / dataset
+    return base / phase / f"seed_{seed}"
+
+
+def _overall_local_f1(dataset: str, phase: str) -> float | None:
+    """Mean valid-window F1 pooled across SEEDS for (dataset, phase).
+
+    Same metric as ``_local_f1_by_segment``'s ``overall``. Returns None if any
+    seed's snapshots.parquet is missing (run not yet present -> cell skipped).
+    """
+    rows = []
+    for s in SEEDS:
+        f = _run_dir(dataset, phase, s) / "snapshots.parquet"
+        if not f.exists():
+            return None
+        df = pd.read_parquet(f)
+        rows.append(df[df["valid"]][["f1"]])
+    return float(pd.concat(rows)["f1"].mean())
+
+
+def _mean_n_drifts(dataset: str, phase: str) -> float | None:
+    """Mean adaptation count (n_drifts) across SEEDS for (dataset, phase).
+
+    Returns None if any seed's summary.json is missing.
+    """
+    vals = []
+    for s in SEEDS:
+        f = _run_dir(dataset, phase, s) / "summary.json"
+        if not f.exists():
+            return None
+        vals.append(json.loads(f.read_text())["n_drifts"])
+    return float(np.mean(vals))
+
+
 def fig6_frequency_ablation() -> None:
     """C_freq control: same adaptation count as C_early, blind periodic timing.
 
@@ -578,6 +619,101 @@ def fig11_early_ensemble() -> None:
     print("  wrote fig11_early_ensemble.png")
 
 
+def fig12_external_validity() -> None:
+    """#4: does the proactive early trigger generalize across datasets?
+
+    Replicates fig11's base-learner x trigger 2x2 (reactive `*_sched`/B vs
+    proactive `*_early`) per dataset (CICIDS2017 anchor, CICIDS2018, UNSW-NB15).
+    Cells whose runs are not (yet) complete across all 5 seeds are skipped —
+    the bar / delta annotation is simply not drawn.
+    """
+    datasets = ["cicids2017", "cicids2018", "unsw"]
+    dset_label = {"cicids2017": "CIC-IDS2017", "cicids2018": "CIC-IDS2018",
+                  "unsw": "UNSW-NB15"}
+    learners = [("HAT", "B", "C_early"), ("ARF", "ARF_sched", "ARF_early"),
+                ("SRP", "SRP_sched", "SRP_early")]
+    phases = sorted({p for _, r, e in learners for p in (r, e)})
+
+    f1_ov = {(ds, p): _overall_local_f1(ds, p) for ds in datasets for p in phases}
+    n_drifts = {(ds, p): _mean_n_drifts(ds, p) for ds in datasets for p in phases}
+    if not any(v is not None for v in f1_ov.values()):
+        print("  (fig12 skipped — no cross-dataset runs present yet)")
+        return
+
+    fig, axes = plt.subplots(1, len(datasets), figsize=(13.5, 5.0), sharey=True)
+    w = 0.36
+    # label each series exactly once, in whichever axis first has data for it
+    reactive_labeled = proactive_labeled = False
+    legend_ax = None
+    for ax, ds in zip(axes, datasets, strict=False):
+        x = np.arange(len(learners))
+        drew_any = False
+        for i, (_base, r, e) in enumerate(learners):
+            fr, fe = f1_ov[(ds, r)], f1_ov[(ds, e)]
+            if fr is not None:
+                lbl = None
+                if not reactive_labeled:
+                    lbl, reactive_labeled, legend_ax = "reactive trigger", True, ax
+                ax.bar(i - w / 2, fr, w, color="#b0b0b0", edgecolor="white", label=lbl)
+                ax.annotate(f"{fr:.2f}", (i - w / 2, fr), xytext=(0, 3),
+                            textcoords="offset points", ha="center", fontsize=8.5,
+                            fontweight="bold")
+                drew_any = True
+            if fe is not None:
+                lbl = None
+                if not proactive_labeled:
+                    lbl, proactive_labeled, legend_ax = "proactive early trigger", True, ax
+                ax.bar(i + w / 2, fe, w, color="#009E73", edgecolor="white", label=lbl)
+                ax.annotate(f"{fe:.2f}", (i + w / 2, fe), xytext=(0, 3),
+                            textcoords="offset points", ha="center", fontsize=8.5,
+                            fontweight="bold")
+                drew_any = True
+            if fr is not None and fe is not None:
+                d = fe - fr
+                ax.annotate(f"{'+' if d >= 0 else ''}{d:.2f}", (i, max(fr, fe)),
+                            xytext=(0, 16), textcoords="offset points", ha="center",
+                            fontsize=9, fontweight="bold",
+                            color="#009E73" if d >= 0 else "#d55e00")
+        ax.set_xticks(x)
+        ax.set_xticklabels([b for b, _, _ in learners], fontsize=10)
+        ax.set_title(dset_label[ds], fontsize=11)
+        ax.set_xlabel("base learner")
+        if not drew_any:
+            ax.text(0.5, 0.5, "runs pending", transform=ax.transAxes, ha="center",
+                    va="center", fontsize=10, color="#999999", style="italic")
+    if legend_ax is not None:
+        legend_ax.legend(loc="upper left", fontsize=8)
+    axes[0].set_ylabel("overall local F1 (mean valid window, 5 seeds)")
+    present = [v for v in f1_ov.values() if v is not None]
+    ymax = max(present) * 1.25 if present else 1.0
+    for ax in axes:
+        ax.set_ylim(0, ymax)
+    fig.suptitle("Does the proactive early trigger generalize across datasets?",
+                 fontsize=12, fontweight="bold")
+    fig.text(0.5, 0.01, "Δ above each pair = gain from swapping reactive -> proactive "
+             "early trigger, per dataset.\nBlank panels: dataset runs not yet complete "
+             "(5/5 seeds required per cell).", ha="center", va="bottom", fontsize=8.5,
+             color="#555")
+    fig.subplots_adjust(top=0.80, bottom=0.20)
+    fig.savefig(OUT / "fig12_external_validity.png")
+    plt.close(fig)
+    print("  wrote fig12_external_validity.png")
+
+    # -- printed cross-dataset summary table (feeds the doc write-up) -------
+    print("\ncross-dataset summary (mean overall local F1, mean n_drifts):")
+    header = f"{'dataset':<12} {'phase':<10} {'overall_f1':>10} {'n_drifts':>10}"
+    print(header)
+    print("-" * len(header))
+    for ds in datasets:
+        for phase in phases:
+            f1, nd = f1_ov[(ds, phase)], n_drifts[(ds, phase)]
+            if f1 is None and nd is None:
+                continue
+            f1s = f"{f1:.3f}" if f1 is not None else "n/a"
+            nds = f"{nd:.1f}" if nd is not None else "n/a"
+            print(f"{ds:<12} {phase:<10} {f1s:>10} {nds:>10}")
+
+
 def main() -> None:
     summ = load_summaries()
     fig1_trajectory()
@@ -588,6 +724,7 @@ def main() -> None:
     fig9_monitor_pipeline(summ)
     fig10_budget_matched(summ)
     fig11_early_ensemble()
+    fig12_external_validity()
     print("wrote:")
     for p in sorted(OUT.glob("*.png")):
         print(" ", p)
