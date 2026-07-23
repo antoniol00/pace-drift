@@ -9,6 +9,7 @@
 - **The monitor can be cheap** — a linear PCA reconstruction nearly matches the autoencoder in the full pipeline (0.969 vs 0.986); the generative model is over-engineered.
 - **SOTA ensembles (ARF/SRP) win on raw quality** — but mainly by **model capacity, not continuous supervision**: budget-matched to ~233 sparse adaptations they still lead, while continuous learning (~2M updates) adds only ~0.05–0.08.
 - **The constructive result** — the proactive early trigger improves **every** base learner, more for the stronger ones, with fewer adaptations: **SRP + early detection = 0.769 sustained F1 with just 91 adaptations**.
+- **The direction generalizes across datasets** — replicated on CIC-IDS2018 and UNSW-NB15, the proactive trigger improves overall local F1 in **all 9 (dataset × base-learner) cells**. What is 2017-specific: the label-efficiency (on 2018/UNSW it fires *more*, not fewer) and the "gains grow with model strength" pattern. Only the *sign* is invariant — so the cross-dataset claim is "helps every base learner", not "at a fraction of the budget".
 
 ![Proactive early detection improves every base learner](docs/figures/fig11_early_ensemble.png)
 
@@ -194,7 +195,7 @@ Interpretation and limitations:
 - **Schedule bias**: the shared schedule is derived from B's dynamics; it makes pairing valid but slightly favors strategies that behave like B. The label-derived schedule bounds this effect.
 - **Oracle labels**: prequential evaluation assumes labels arrive immediately after prediction; in real IDS deployments labels are delayed or partial. All phases share this assumption, so comparisons remain internally valid.
 - **GAN scale**: buffers of 5–500 samples are extreme for GAN training; the C' control exists precisely because "the GAN worked" is not credible without it — and indeed it did not.
-- **Single dataset / ordering**: results are tied to CICIDS2017's specific attack ordering; a second-dataset replication (CIC-IDS2018 / UNSW-NB15) is in progress.
+- **Cross-dataset scope**: the *direction* of the proactive-trigger result replicates on CIC-IDS2018 and UNSW-NB15 (all 9 cells positive, §8), but the *magnitude* and the label-efficiency are CICIDS2017-specific — the "fewer adaptations" claim does not generalize. All three datasets are CICFlowMeter-family, natural-drift network captures; IoT streams (CICIoT2023, Edge-IIoTset) were excluded because they lack usable temporal drift.
 
 ## 10. Repository structure
 
@@ -226,7 +227,7 @@ Makefile                 # setup / test / lint / smoke / schedule / run-* / run-
 
 ## 11. Future work
 
-- **Second dataset** (in progress): replicate on CIC-IDS2018 / UNSW-NB15 / CIC-DDoS2019, and randomize attack-block ordering to decouple results from CICIDS2017's specific sequence.
+- **Second/third dataset** (2018 + UNSW done, §8): extend to CIC-DDoS2019, and randomize attack-block ordering to decouple results from each dataset's specific sequence. Recover the label-efficiency that held on 2017 but not on 2018/UNSW (tune the dynamic trigger so it does not over-fire on denser-drift streams).
 - Label-delay simulation (labels arriving k samples late) to stress the prequential assumption — currently all phases assume immediate labels.
 - Pair a lightweight ensemble with the sparse triggered-adaptation regime (the budget-matched SOTA runs suggest model capacity, not continuous supervision, drives the ensemble lead).
 - Adaptive `n_synthetic` per event (scale with buffer size / detector confidence).
