@@ -1,0 +1,7 @@
+phase: SRP_freq
+# Frequency-matched control for SRP_early (Tier 1). SRP adapting only in
+# triggered train windows on a BLIND periodic clock, count-matched to SRP_early.
+# Comparing SRP_early vs SRP_freq isolates adaptation *timing* from *frequency*.
+# Pass the per-dataset interval on the CLI:
+#   2018: --periodic-adapt-interval 11505   UNSW: --periodic-adapt-interval 9857
+periodic_adapt_interval: 11505

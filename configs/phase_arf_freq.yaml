@@ -1,0 +1,9 @@
+phase: ARF_freq
+# Frequency-matched control for ARF_early (Tier 1). ARF adapting only in
+# triggered train windows on a BLIND periodic clock, with interval chosen so the
+# fire count matches ARF_early's mean for the dataset. Comparing ARF_early vs
+# ARF_freq isolates adaptation *timing* (informed anticipation) from *frequency*
+# (how often), the decisive test on the external datasets where ARF_early fires
+# MORE than the reactive schedule. Pass the per-dataset interval on the CLI:
+#   2018: --periodic-adapt-interval 11587   UNSW: --periodic-adapt-interval 9549
+periodic_adapt_interval: 11587

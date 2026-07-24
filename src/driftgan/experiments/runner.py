@@ -194,7 +194,9 @@ def run_phase(
         trigger = DynamicDetectorTrigger(river_drift.ADWIN(), name="adwin")
     elif phase == "B_kswin":
         trigger = DynamicDetectorTrigger(river_drift.KSWIN(seed=seed), name="kswin")
-    elif phase == "C_freq":
+    elif phase.endswith("_freq"):
+        # C_freq (HAT) and the ensemble frequency-matched controls ARF_freq /
+        # SRP_freq: adapt on a blind periodic clock, count-matched to *_early.
         trigger = PeriodicTrigger(
             interval=config.periodic_adapt_interval, start_after=config.n_pretrain
         )

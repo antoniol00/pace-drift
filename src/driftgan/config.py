@@ -26,8 +26,15 @@ VALID_PHASES = (
     # C_early's proactive early-detection trigger on a SOTA ensemble base learner
     # (Experiment #3c): does anticipation help the strongest model, or only HAT?
     "ARF_early", "SRP_early",
+    # Frequency-matched controls for the ensembles (Tier 1): ARF/SRP adapting on
+    # a blind periodic clock whose count matches *_early, isolating adaptation
+    # *frequency* from *timing* on the external datasets (generalizes C_freq).
+    "ARF_freq", "SRP_freq",
     # Monitor ablations of C_early (Experiment #2): cheap shift monitors.
     "C_early_mean", "C_early_pca", "C_early_ks", "C_early_mmd",
+    # Published unsupervised drift detector as an external comparator for the
+    # monitor (D3, Gozuacik et al. CIKM 2019) at the identical protocol.
+    "C_early_d3",
 )
 
 

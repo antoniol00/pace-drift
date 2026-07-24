@@ -1,5 +1,13 @@
 # Experiment 2 — Monitor ablation (is the autoencoder justified?)
 
+> **⚠️ Conclusion revised by [experiment 7](07-unsupervised-comparator.md).** This
+> page judges the monitors on *final F1*, which masks mid-stream collapse: the PCA
+> arm's seed 1 shows `final_f1 = 0.948` while its cumulative accuracy is `0.444`
+> and its false-positive rate `0.657`. Judged on **closed-loop stability**, only
+> the autoencoder is stable in 5/5 seeds (PCA and mean-shift collapse in 2/5).
+> The autoencoder *is* justified — by stability, not by detection quality. Read
+> this page together with experiment 7.
+
 ## Question
 
 The generative autoencoder is the novelty of C_early. A reviewer will ask whether

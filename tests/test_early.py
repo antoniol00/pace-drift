@@ -123,3 +123,30 @@ def test_shift_monitor_quiet_without_shift(kind):
     shifted = _feed(m, mean=6.0, n=1500, seed=3, start=3600)
     # No-shift scores stay well below the monitor's own response to a real shift.
     assert max(steady) < 0.5 * max(shifted[:3])
+
+
+def test_d3_monitor_auc_separability_semantics():
+    """D3's discriminative statistic: calibrated on identical data, sharp on shift.
+
+    Also pins the *known limitation* that explains the comparator result in
+    docs/experiments/07-unsupervised-comparator.md: a linear discriminator sees
+    mean shifts but is blind to a variance-only change, which reconstruction
+    error does capture.
+    """
+    from driftgan.early.shift_monitors import D3Monitor
+
+    m = D3Monitor(seed=0)
+    rng = np.random.default_rng(0)
+    ref = rng.standard_normal((600, 20))
+
+    m._ref = ref
+    same = m._score(rng.standard_normal((600, 20)))
+    assert 0.40 < same < 0.60  # no separability on identical distributions
+
+    m._ref = ref
+    shifted = m._score(rng.standard_normal((600, 20)) + 3.0)
+    assert shifted > 0.95  # mean shift is trivially separable
+
+    m._ref = ref
+    variance_only = m._score(rng.standard_normal((600, 20)) * 2.5)
+    assert variance_only < 0.65  # blind spot: same mean, different dispersion

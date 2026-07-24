@@ -307,7 +307,7 @@ def fig3_early(summ: pd.DataFrame) -> None:
     plt.close(fig)
 
 
-def _local_f1_by_segment(phase: str, edges: list[float]) -> tuple[list, list]:
+def _local_f1_by_segment(phase: str, edges: list[float]) -> tuple[list, float]:
     """Mean valid-window F1 in each [edge, edge) band, pooled across seeds."""
     rows = []
     for s in SEEDS:
@@ -345,6 +345,18 @@ def _overall_local_f1(dataset: str, phase: str) -> float | None:
         df = pd.read_parquet(f)
         rows.append(df[df["valid"]][["f1"]])
     return float(pd.concat(rows)["f1"].mean())
+
+
+def _per_seed_local_f1(dataset: str, phase: str) -> np.ndarray | None:
+    """Overall local F1 per seed (not pooled) for (dataset, phase), or None."""
+    out = []
+    for s in SEEDS:
+        f = _run_dir(dataset, phase, s) / "snapshots.parquet"
+        if not f.exists():
+            return None
+        df = pd.read_parquet(f)
+        out.append(float(df.loc[df["valid"], "f1"].mean()))
+    return np.array(out)
 
 
 def _mean_n_drifts(dataset: str, phase: str) -> float | None:
@@ -714,6 +726,80 @@ def fig12_external_validity() -> None:
             print(f"{ds:<12} {phase:<10} {f1s:>10} {nds:>10}")
 
 
+def fig13_timing_vs_frequency() -> None:
+    """Tier 1: on the external datasets, is the ensemble gain *when* or *how often*?
+
+    Three arms at comparable adaptation frequency per decisive cell (ARF/SRP on
+    CIC-IDS2018 and UNSW-NB15): reactive schedule, blind periodic (`*_freq`, fire
+    count matched to `*_early`), and informed proactive (`*_early`). The timing
+    component `early - freq` (same count, informed vs blind placement) is the
+    clean test. Skipped until the `*_freq` runs exist.
+    """
+    # (dataset, learner label, reactive, frequency-control, proactive)
+    cells = [("cicids2018", "ARF"), ("cicids2018", "SRP"),
+             ("unsw", "ARF"), ("unsw", "SRP")]
+    phases = {"sched": "{L}_sched", "freq": "{L}_freq", "early": "{L}_early"}
+    vals: dict[tuple, dict] = {}
+    for ds, learner in cells:
+        cell = {}
+        for arm, tmpl in phases.items():
+            cell[arm] = _per_seed_local_f1(ds, tmpl.format(L=learner))
+        vals[(ds, learner)] = cell
+    if not any(c["freq"] is not None for c in vals.values()):
+        print("  (fig13 skipped — *_freq runs not present yet)")
+        return
+
+    dset_label = {"cicids2018": "CIC-IDS2018", "unsw": "UNSW-NB15"}
+    pal = {"sched": "#b0b0b0", "freq": "#E69F00", "early": "#009E73"}
+    arm_label = {"sched": "reactive", "freq": "blind, matched freq", "early": "informed timing"}
+    fig, ax = plt.subplots(figsize=(11, 5.2))
+    x = np.arange(len(cells))
+    w = 0.26
+    labelled = set()
+    for j, arm in enumerate(("sched", "freq", "early")):
+        for i, (ds, learner) in enumerate(cells):
+            v = vals[(ds, learner)][arm]
+            if v is None:
+                continue
+            lbl = arm_label[arm] if arm not in labelled else None
+            labelled.add(arm)
+            ax.bar(i + (j - 1) * w, v.mean(), w, color=pal[arm], edgecolor="white",
+                   label=lbl, hatch="//" if arm == "freq" else None)
+            ax.annotate(f"{v.mean():.2f}", (i + (j - 1) * w, v.mean()),
+                        xytext=(0, 2), textcoords="offset points", ha="center",
+                        fontsize=8)
+    # timing delta (early - freq), paired by seed, annotated above each group
+    for i, (ds, learner) in enumerate(cells):
+        e, f = vals[(ds, learner)]["early"], vals[(ds, learner)]["freq"]
+        if e is None or f is None:
+            continue
+        d = float((e - f).mean())
+        top = max(e.mean(), f.mean(), vals[(ds, learner)]["sched"].mean())
+        ax.annotate(f"timing {'+' if d >= 0 else ''}{d:.3f}", (i, top),
+                    xytext=(0, 16), textcoords="offset points", ha="center",
+                    fontsize=9, fontweight="bold",
+                    color="#009E73" if d > 0.01 else "#777777")
+    ax.set_xticks(x)
+    ax.set_xticklabels([f"{dset_label[ds]}\n{learner}" for ds, learner in cells],
+                       fontsize=9)
+    ax.set_ylabel("overall local F1 (mean valid window, 5 seeds)")
+    ax.set_title("At matched adaptation frequency: is the gain timing or frequency?")
+    present = [v[a].mean() for v in vals.values() for a in ("sched", "freq", "early")
+               if v[a] is not None]
+    ax.set_ylim(0, max(present) * 1.2)
+    ax.legend(loc="lower right", fontsize=9)
+    ax.text(0.5, 1.12, "Timing = early − freq (same fire count, informed vs blind "
+            "placement). CIC-IDS2018: informed timing wins and blind-more even "
+            "*hurts*.\nUNSW: timing ≈ 0 — the gain there is frequency. The split "
+            "tracks drift structure, consistent across ARF and SRP.",
+            transform=ax.transAxes, ha="center", va="bottom", fontsize=8.5,
+            color="#555")
+    fig.subplots_adjust(top=0.80)
+    fig.savefig(OUT / "fig13_timing_vs_frequency.png")
+    plt.close(fig)
+    print("  wrote fig13_timing_vs_frequency.png")
+
+
 def main() -> None:
     summ = load_summaries()
     fig1_trajectory()
@@ -725,6 +811,7 @@ def main() -> None:
     fig10_budget_matched(summ)
     fig11_early_ensemble()
     fig12_external_validity()
+    fig13_timing_vs_frequency()
     print("wrote:")
     for p in sorted(OUT.glob("*.png")):
         print(" ", p)

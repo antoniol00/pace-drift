@@ -39,10 +39,13 @@ PHASE_CONFIG = {
     "SRP": "phase_srp.yaml",
     "C_early_mean": "phase_c_early_mean.yaml",
     "C_early_pca": "phase_c_early_pca.yaml",
+    "C_early_d3": "phase_c_early_d3.yaml",
     "ARF_sched": "phase_arf_sched.yaml",
     "SRP_sched": "phase_srp_sched.yaml",
     "ARF_early": "phase_arf_early.yaml",
     "SRP_early": "phase_srp_early.yaml",
+    "ARF_freq": "phase_arf_freq.yaml",
+    "SRP_freq": "phase_srp_freq.yaml",
 }
 
 
@@ -76,6 +79,8 @@ def main() -> None:
     parser.add_argument("--n-jobs", type=int, default=1, help="Parallel seed workers")
     parser.add_argument("--drift-schedule", type=Path, help="Shared drift schedule JSON (overrides dynamic PHT)")
     parser.add_argument("--max-samples", type=int, help="Override max_samples (quick runs)")
+    parser.add_argument("--periodic-adapt-interval", type=int,
+                        help="Override periodic_adapt_interval (frequency-matched *_freq controls)")
     parser.add_argument("--build-schedule", action="store_true",
                         help="Run pass 0 (Phase B dynamics) and write the schedule to --out")
     parser.add_argument("--out", type=Path, help="Output path for --build-schedule")
@@ -88,6 +93,8 @@ def main() -> None:
         overrides["drift_schedule"] = str(args.drift_schedule)
     if args.max_samples:
         overrides["max_samples"] = args.max_samples
+    if args.periodic_adapt_interval:
+        overrides["periodic_adapt_interval"] = args.periodic_adapt_interval
 
     if args.build_schedule:
         config_path = args.config or CONFIGS_DIR / "phase_b.yaml"
