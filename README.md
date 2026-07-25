@@ -211,15 +211,15 @@ src/driftgan/
 ├── augment/               # base protocol + FeatureScaler, bootstrap_jitter, vanilla_gan, wgan_gp, cgan
 ├── early/
 │   ├── reconstruction_monitor.py  # autoencoder monitor (AE)
-│   ├── shift_monitors.py          # cheap ablations: PCA / KS / MMD / mean-shift
+│   ├── shift_monitors.py          # cheap ablations + D3 comparator: PCA / KS / MMD / mean-shift / D3
 │   └── dual_pht.py                # dual PHT + lead-time pairing
-├── metrics/               # rolling (O(1) F1), recovery (RT/AUD), cost, gan_quality
+├── metrics/               # rolling (O(1) F1), recovery (RT/AUD), cost
 ├── experiments/           # runner (unified engine), seeding, manifest, stats
 └── viz/plots.py           # stream comparison, boxplots, RT CDF, Pareto
 configs/                 # base.yaml + one YAML per phase (core + reviewer/SOTA/ablation phases)
-scripts/                 # make_report.py; paper_figures.py, reviewer_analysis.py, monitor_ablation.py
-docs/                    # architecture.md, methodology.md, gan_design.md, figures/, experiments/*.md
-notebooks/               # 03_recovery_analysis, 05_early_detection (analysis only)
+scripts/                 # make_report, paper_figures, reviewer_analysis, monitor_ablation;
+                         # tier0/tier1/comparator analyses, synthetic_{structure,clustering}
+docs/                    # architecture.md, methodology.md, gan_design.md, figures/, experiments/*.md, paper/
 tests/                   # pytest: recovery, schedule/triggers, early monitors, models, stats, augment, e2e
 run_experiment.py        # multi-seed CLI (also builds the schedule: --build-schedule)
 Makefile                 # setup / test / lint / smoke / schedule / run-* / run-sota[-matched] / report

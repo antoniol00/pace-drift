@@ -34,15 +34,19 @@ Known weakness: it is subtype-blind. CICIDS2017 subtypes (DoS variants, PortScan
 
 Each ablation is a config file away (`configs/phase_c_cond.yaml`); results should be compared on the per-subtype quality metrics below **and** on downstream recovery metrics — better MMD that does not move RT/AUD is not a contribution.
 
-## Sample-quality measurement
+## Sample-quality measurement (specified, not used)
 
-`driftgan.metrics.gan_quality`:
+The original design called for per-subtype sample-quality metrics — multivariate
+energy distance (Székely–Rizzo) and RBF-MMD², both standardized with the *real*
+subset's statistics — in a `driftgan.metrics.gan_quality` module.
 
-- **Multivariate energy distance** (Székely–Rizzo) between real buffer samples and generated samples, per subtype.
-- **RBF-MMD²** (biased V-statistic, median-heuristic bandwidth), per subtype.
-- Both computed after standardizing with the *real* subset's statistics, so scale-heavy features do not dominate.
-
-Caveats to keep in mind when reading these numbers: with n_real sometimes as low as 5, both metrics are high-variance; report them per event and prefer their trend across events to any single value.
+**These were never used in the reported experiments and the module has been
+removed.** The reason is the design's own caveat: with `n_real` sometimes as low
+as 5, both metrics are too high-variance to support a conclusion. The verdict on
+generative augmentation was instead reached on *downstream* recovery metrics
+(RT/AUD/local F1) against budget-matched controls — which is the standard this
+document itself sets: "better MMD that does not move RT/AUD is not a
+contribution." See [experiment 00](experiments/00-core-run.md).
 
 ## Open questions / expected failure modes
 

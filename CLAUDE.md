@@ -40,6 +40,6 @@ Load-bearing design decisions (details in docs/methodology.md):
 
 - Everything in English. Structured JSON logging via `driftgan.logging` (no bare prints in library code; CLI prints are fine).
 - ruff + mypy must pass (`make lint typecheck`); type hints everywhere; NumPy-style docstrings on public functions.
-- Notebooks are analysis-only (load parquets); pipelines live in `src/`.
+- Analysis lives in `scripts/` (load the persisted parquets/JSON and emit tables + figures); pipelines live in `src/`. The exploratory notebooks were removed in the 2026-07-25 cleanup — do not reintroduce notebooks for reported results.
 - The legacy PoC modules (`module_*`, `compare/`, `common/`, `requirements.txt`) have been removed; all work lives in `src/driftgan/` with dependencies pinned in `pyproject.toml` + `uv.lock`.
 - The CIC-IDS2017 CSV lives outside the repo at `/mnt/AI-DATA-SSD/alara/Data/CIC-IDS2017.csv` (`configs/base.yaml:csv_path`).

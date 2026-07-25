@@ -58,6 +58,8 @@ fire count, informed vs blind placement). Script: `scripts/tier1_analysis.py`.
 | UNSW-NB15 | ARF | 117 / 172 / 173 | 0.597 / 0.655 / 0.658 | +0.002 [−0.009, +0.014] | ~freq |
 | UNSW-NB15 | SRP | 117 / 167 / 167 | 0.695 / 0.743 / 0.746 | +0.002 [−0.005, +0.009] | ~freq |
 
+![Timing vs frequency at matched adaptation count](../figures/fig13_timing_vs_frequency.png)
+
 ## Interpretation
 
 - **The split is a property of the dataset, not the learner.** ARF and SRP agree
@@ -87,6 +89,8 @@ experiments tried to isolate a drift-structure mechanism and **both failed** to:
 - `scripts/synthetic_clustering.py` (sweep *temporal concentration* φ of onsets):
   the timing benefit was large and positive at *every* φ (~+0.2), not increasing
   with concentration.
+
+![Synthetic drift-clustering sweep: timing benefit is flat in φ](../figures/fig14b_synthetic_clustering.png)
 
 Per the pre-registered decision rule the drift-structure claim is **retreated**.
 What the second synthetic *does* show is the **core** result in a controlled
