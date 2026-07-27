@@ -16,9 +16,16 @@ GAN internals in [gan_design.md](gan_design.md); the per-experiment results in
 | Slot | Options | Where |
 |---|---|---|
 | **Model** | Hoeffding Adaptive Tree · Adaptive Random Forest · Streaming Random Patches | `models/streaming.py:make_model` |
-| **Trigger** | none (frozen) · shared schedule · dynamic PHT · ADWIN/KSWIN detector · blind periodic clock · dual (recon+class) PHT · continuous (learn every sample) | `drift/schedule.py`, runner |
+| **Trigger** | none (frozen) · shared schedule · dynamic PHT · ADWIN/KSWIN detector · blind periodic clock (`C_freq`, `ARF_freq`, `SRP_freq`) · dual (recon+class) PHT · continuous (learn every sample) | `drift/schedule.py`, runner |
 | **Augmenter** | none · vanilla GAN · bootstrap+jitter · conditional WGAN-GP | `augment/`, `_make_augmenter` |
-| **Monitor** | none · autoencoder · PCA reconstruction · KS · MMD · mean-shift | `early/`, `_make_monitor` |
+| **Monitor** | none · autoencoder · PCA reconstruction · KS · MMD · mean-shift · D3 discriminative (published comparator) | `early/`, `_make_monitor` |
+
+The **trigger** slot is where the research contribution lives: the study is about
+*when* adaptation fires. The blind periodic clock exists solely as its control —
+firing the same number of times on no signal at all — and the monitor slot exists
+to ask which unlabelled signal makes a good trigger (see
+[experiment 7](experiments/07-unsupervised-comparator.md): monitors that detect
+comparably do **not** trigger comparably).
 
 ```mermaid
 flowchart LR
@@ -80,7 +87,17 @@ frame** set on the first check, then, on every later check, **score before
 updating the reference** so a distribution change shows up as a *leading* spike.
 The autoencoder (`reconstruction_monitor.py`) is the original proposal;
 `shift_monitors.py` adds cheap ablations (PCA reconstruction, KS, MMD,
-mean-shift) with the identical protocol so the generative model can be isolated.
+mean-shift) plus **D3** (Gözüaçık et al., CIKM 2019), the published unsupervised
+detector used as an external comparator — all under the identical protocol, so
+arms differ in the *signal* and nothing else.
+
+Sharing the protocol is what makes the monitor slot a fair experiment, and it
+produced the study's least expected result: monitors that detect comparably do
+**not** trigger comparably. Because the monitor decides *where* training windows
+open, a mis-placed signal skews the label composition the learner is fed and can
+collapse it into a high-false-positive regime — so monitors must be judged by
+closed-loop stability, not detectability
+([experiment 7](experiments/07-unsupervised-comparator.md)).
 
 ### Metrics (`metrics/`)
 Rolling O(1) F1, per-event recovery (RT / AUD / min-F1 / no-recovery with

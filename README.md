@@ -1,45 +1,50 @@
-# DriftGAN — GAN-assisted concept-drift adaptation for streaming intrusion detection
+# DriftGAN — *When to adapt*: a cheap unsupervised covariate-shift trigger for streaming intrusion detection
 
-**Abstract.** Streaming intrusion detectors degrade when attack traffic drifts away from the distribution they were trained on. This project turns a proof-of-concept (Hoeffding Adaptive Tree + Page-Hinkley drift detection + GAN-based sample augmentation on CICIDS2017) into a reproducible, statistically defensible experiment: a shared drift schedule makes phases comparable event-by-event, per-event recovery metrics (RT, AUD) quantify adaptation quality, a naive-oversampling control isolates the GAN's contribution, and an experimental generative monitor tests whether reconstruction error can *anticipate* drift rather than react to it. The full 5-seed experiment has been run and hardened with reviewer-oriented controls — a frequency-matched adaptation control, an ablation of the generative monitor against cheap covariate-shift statistics, and state-of-the-art streaming baselines (ADWIN/KSWIN detectors, ARF/SRP ensembles). Findings: **GAN-based *adaptation* gives no measurable benefit over the reactive baseline** (a null result, honestly reported); the **generative *early-detection* monitor does anticipate drift**, though a cheap linear monitor nearly matches the autoencoder; and, most constructively, the **proactive early trigger improves every base learner tested — including the state-of-the-art ARF/SRP ensembles — while using fewer adaptations**, making it a cheap, model-agnostic *when-to-adapt* signal rather than a generative augmenter. See [Results](#8-results).
+**Abstract.** Streaming intrusion detectors degrade as attack traffic drifts away from the distribution they were trained on, and the standard remedy — retraining once classification error rises — inherits the delay of labelled feedback. This project treats **when to adapt** as a design decision in its own right: an unsupervised monitor watches the reconstruction error of *incoming traffic* and triggers adaptation before the error signal responds, with learning confined to short triggered windows instead of continuous supervision. The claim is validated prequentially on three intrusion-detection datasets (CICIDS2017, CIC-IDS2018, UNSW-NB15) × three streaming learners (HAT, ARF, SRP), 5 seeds each, under **budget-matched controls** that separate adaptation *timing* from adaptation *frequency* and from *model capacity*. The proactive trigger improves sustained detection quality in all nine cells, and a frequency-matched blind clock isolates timing as the cause on CICIDS2017/2018. A final experiment shows that trigger quality must be judged by **closed-loop stability**, not detection accuracy: monitors that detect comparably — including a published unsupervised detector — can drive the learner into a catastrophic false-positive regime. See [Results](#8-results).
+
+> **Note on the name.** The project began as *DriftGAN*, testing whether GANs could improve drift **adaptation** (generating synthetic samples of a new attack) and **anticipation**. Under budget-matched controls the generative *augmentation* gave no measurable benefit, while the anticipation branch — which generates nothing — did. The repository keeps the name and the full generative code path so the controlled refutation stays reproducible, but the research contribution is the **when-to-adapt policy**. The full reasoning trail is in [docs/paper/idea-central.md](docs/paper/idea-central.md).
 
 ## Key results at a glance
 
-- **GAN adaptation is a null result** — vanilla (C) and conditional WGAN-GP (C_cond) do not beat the reactive baseline B (Wilcoxon *p* = 0.62); naive oversampling (C') is worse. A generative *augmenter* is not the answer.
-- **The generative early-detection monitor works** — C_early reaches 0.986 final F1 with genuine anticipation lead times (~7K samples), and its gain is **timing, not frequency** (a frequency-matched blind control falls *below* B).
-- **The monitor can be cheap** — a linear PCA reconstruction nearly matches the autoencoder in the full pipeline (0.969 vs 0.986); the generative model is over-engineered.
-- **SOTA ensembles (ARF/SRP) win on raw quality** — but mainly by **model capacity, not continuous supervision**: budget-matched to ~233 sparse adaptations they still lead, while continuous learning (~2M updates) adds only ~0.05–0.08.
-- **The constructive result** — the proactive early trigger improves **every** base learner, more for the stronger ones, with fewer adaptations: **SRP + early detection = 0.769 sustained F1 with just 91 adaptations**.
-- **The direction generalizes across datasets** — replicated on CIC-IDS2018 and UNSW-NB15, the proactive trigger improves overall local F1 in **all 9 (dataset × base-learner) cells**. What is 2017-specific: the label-efficiency (on 2018/UNSW it fires *more*, not fewer) and the "gains grow with model strength" pattern. Only the *sign* is invariant — so the cross-dataset claim is "helps every base learner", not "at a fraction of the budget".
+- **The proactive trigger works, and it is not a crutch for a weak model** — swapping a reactive (error-based) trigger for the unsupervised covariate-shift trigger improves sustained local F1 in **all 9 (dataset × base-learner) cells**; aggregated, **+0.033 [95% CI +0.015, +0.051]**. It is *robust* (all seeds agree in sign, paired CI excludes 0) in **all six ensemble cells**, and holds under imbalance-aware κ.
+- **It is timing, not just frequency** — against a blind periodic clock firing the *same number of times*, informed placement gains **+0.038 (ARF) / +0.048 (SRP)** on CIC-IDS2018, where adapting more on a blind schedule actively *hurts* (0.881 vs the sparser reactive 0.925). A controlled synthetic stream reproduces the advantage (+0.21 at matched frequency).
+- **Honest scope** — on UNSW-NB15 the benefit is adaptation *frequency*, not timing (+0.002, CI straddles 0). Two **pre-specified** synthetic experiments failed to isolate a drift-structure mechanism, so the split is reported as an empirical observation and no mechanism is claimed.
+- **Trigger quality ≠ detection quality** — monitors that detect comparably behave very differently *in the loop*: collapse counts are **0/5 (autoencoder)**, 2/5 (PCA), 2/5 (mean-shift), **4/5 (D3, CIKM'19)**. Badly placed triggers feed the learner **43–47% attack against a 20% base rate**, skewing its prior until the false-positive rate reaches **0.49–0.66**.
+- **Model capacity matters more than the augmenter** — budget-matched to ~233 sparse adaptations, ensembles still lead a single tree by ~+0.15 sustained F1, while continuous supervision (~2M updates) adds only ~0.05–0.08. The practical recipe is **ensemble + proactive triggered adaptation**.
+- **Sub-millisecond cost** — the monitor is a linear-algebra pass on a small buffer; p95 latency stays under 0.5 ms/sample.
 
-![Proactive early detection improves every base learner](docs/figures/fig11_early_ensemble.png)
+![Timing vs frequency at matched adaptation count](docs/figures/fig13_timing_vs_frequency.png)
 
-📄 **Full write-up:** [proposed architecture](docs/architecture.md) · [per-experiment analysis](docs/experiments/) (results, figures, interpretation).
+📄 **Start here:** [the reasoning trail](docs/paper/idea-central.md) (hypothesis → findings, in plain language) · [related work & the unsupervised comparator](docs/paper/related-work.md) · [per-experiment analysis](docs/experiments/) · [architecture](docs/architecture.md) · [methodology](docs/methodology.md).
 
 ## 1. Motivation
 
-Network intrusion detection systems trained offline face non-stationary traffic: new attack campaigns, tool variants and scanning behaviors shift the input distribution (covariate drift) and the input→label relation (real drift). A frozen model silently decays; error-based detectors (like the Page-Hinkley test) only react *after* misclassifications accumulate — precisely the window in which attacks go undetected. The interesting question is not whether adaptation helps (it does) but **how fast a detector recovers, at what computational cost, and whether generative models can shorten — or even anticipate — the recovery window** when only a handful of samples of the new attack exist.
+Network intrusion detection systems trained offline face non-stationary traffic: new attack campaigns, tool variants and scanning behaviours shift the input distribution (covariate drift) and the input→label relation (real drift). A frozen model silently decays; error-based detectors (Page-Hinkley, ADWIN) react only *after* misclassifications accumulate — precisely the window in which attacks go undetected. Labels are also the scarce resource in a real deployment: continuous supervision is the one thing you cannot assume.
+
+That makes **when to adapt** the interesting lever. A signal computed from *unlabelled input* can fire before the error signal does, and adaptation can be confined to short windows around those firings. The questions this repository answers experimentally are: does that help, is it *timing* or merely *more often*, does it survive on strong models, and what makes a good trigger.
 
 ## 2. Contributions
 
-1. **Shared drift schedule** — all compared phases adapt at identical stream indices, making per-event pairing (and paired statistics) valid. (`src/driftgan/drift/schedule.py`)
-2. **Per-event recovery protocol** — Recovery Time, Area Under Deficit, min-F1 and no-recovery flags with explicit handling of F1-undefined windows and overlapping events. (`src/driftgan/metrics/recovery.py`)
-3. **Augmentation control** — bootstrap+jitter baseline with the same synthetic-sample budget as the GAN, separating "more samples" from "better samples". (`src/driftgan/augment/bootstrap_jitter.py`)
-4. **Subtype-conditional WGAN-GP** — drift-time generation conditioned on the attack subtype actually present in the buffer. (`src/driftgan/augment/cgan.py`)
-5. **Generative early-detection monitor (experimental)** — an incrementally trained autoencoder whose reconstruction error feeds a second PHT; lead time over error-based detection is measured, including anticipated false positives. (`src/driftgan/early/reconstruction_monitor.py`)
-6. **Frequency-matched adaptation control** — a phase that adapts on a blind periodic clock at the same count as the early monitor, separating adaptation *frequency* from adaptation *timing*. (`C_freq`, `drift/schedule.py:PeriodicTrigger`)
-7. **Monitor ablation** — cheap covariate-shift monitors (linear PCA reconstruction, per-feature KS, RBF-MMD, mean-shift) sharing the autoencoder's exact protocol, to test whether the generative model is justified as the anticipation signal. (`src/driftgan/early/shift_monitors.py`)
-8. **State-of-the-art baselines** — alternative drift detectors on the HAT (ADWIN, KSWIN) and self-adapting streaming ensembles (Adaptive Random Forest, Streaming Random Patches), plus **budget-matched variants** that restrict the ensembles to the same triggered adaptation budget as the reactive baseline. (`src/driftgan/models/streaming.py`, `drift/schedule.py:DynamicDetectorTrigger`)
-9. **Reproducibility & cost accounting** — multi-seed CLI, manifests (git/config/data hashes), bootstrap CIs, paired Wilcoxon + effect sizes, per-component latency breakdown and RSS tracking; publication figures under `results/report/paper/`.
+1. **An unsupervised *when-to-adapt* policy** — a reconstruction-error monitor over incoming traffic feeding a dual (recon + class) Page-Hinkley trigger, with learning gated to triggered windows. (`src/driftgan/early/`)
+2. **Controls that isolate the mechanism** — a frequency-matched blind clock at identical fire count separates *timing* from *frequency* (`C_freq`, `ARF_freq`, `SRP_freq`); budget-matched ensembles separate *model capacity* from *continuous supervision* (`ARF_sched`, `SRP_sched`).
+3. **Closed-loop stability as the criterion for trigger quality** — monitors compared by what they do to the learner (collapse rate, false-positive regime, the label composition of triggered windows), not by detection metrics. (`scripts/comparator_analysis.py`)
+4. **A published unsupervised detector as an external comparator** — D3 (Gözüaçık et al., CIKM 2019) implemented and run at the identical protocol and matched fire count. (`early/shift_monitors.py:D3Monitor`)
+5. **Cross-dataset validation** — the base-learner × trigger 2×2 replicated on CIC-IDS2018 and UNSW-NB15, with dataset selection driven by a label-ordering diagnostic. (`scripts/scan_drift_window.py`)
+6. **Inferential rigour** — paired-t and bootstrap CIs per cell, prequential Kappa-M/Temporal, per-event stratification of anticipated vs reactive drifts. (`scripts/tier0_analysis.py`)
+7. **Pre-registered synthetic experiments** — two attempts to turn an observed cross-dataset split into a mechanism, both reported despite being negative. (`scripts/synthetic_structure.py`, `synthetic_clustering.py`)
+8. **Shared drift schedule and per-event recovery protocol** — identical adaptation indices across compared phases make per-event pairing valid; RT/AUD/min-F1/no-recovery with explicit handling of F1-undefined windows. (`drift/schedule.py`, `metrics/recovery.py`)
+9. **Reproducibility & cost accounting** — multi-seed CLI, manifests (git/config/CSV hashes), per-component latency breakdown and RSS tracking.
 
 ## 3. Related work
 
-- Hoeffding Adaptive Trees and prequential evaluation for evolving data streams `[TODO: cite Bifet & Gavaldà 2009]`
-- Page-Hinkley test for change detection in streams `[TODO: cite Page 1954; Gama et al. 2013 survey]`
-- Concept-drift adaptation surveys `[TODO: cite Gama et al. 2014; Lu et al. 2019]`
-- Generative replay / pseudo-rehearsal for continual learning `[TODO: cite Shin et al. 2017]`
-- GAN-based augmentation for network intrusion detection `[TODO: cite e.g. Usama et al. 2019; Ring et al. 2019 flow-based generation]`
-- WGAN-GP and spectral normalization `[TODO: cite Gulrajani et al. 2017; Miyato et al. 2018]`
-- CICIDS2017 dataset `[TODO: cite Sharafaldin et al. 2018]`
+The monitor belongs to the **unsupervised / feature-space drift detection** family, and the contribution is positioned as the *policy*, not the detector. Full treatment, including verification status of every citation, in **[docs/paper/related-work.md](docs/paper/related-work.md)**.
+
+- **Supervised (error-based) detection** — the reactive arm we improve on: Page-Hinkley (Page, 1954); DDM (Gama et al., 2004); ADWIN (Bifet & Gavaldà, *SDM* 2007); KSWIN (Raab et al., *Neurocomputing* 2020). ADWIN and KSWIN are run here as baselines and do not beat plain PHT.
+- **Unsupervised / feature-space detection** — the closest family: D3 (Gözüaçık et al., *CIKM* 2019), used as our comparator; HDDDM (Ditzler & Polikar, *IEEE CIDUE* 2011); autoencoder reconstruction error (Jaworski et al., *ICAISC* 2020). Surveys: Gemaque et al. (*WIREs DMKD* 2020); Lu et al. (*IEEE TKDE* 2019).
+- **Adaptive stream learners** — Hoeffding Adaptive Tree (Bifet & Gavaldà, *IDA* 2009); Adaptive Random Forest (Gomes et al., *Machine Learning* 2017); Streaming Random Patches (Gomes, Read & Bifet, *ICDM* 2019).
+- **Drift in network intrusion detection** — CICIDS2017 (Sharafaldin et al., 2018) is the standard testbed precisely because its attacks arrive in temporal blocks; recent drift-aware NIDS work triggers on error or reports end accuracy without separating timing, frequency and capacity — the methodological gap this work targets.
+
+> **Stated plainly:** monitoring autoencoder reconstruction error to detect drift already exists. The signal is not novel; the *policy*, the controls that isolate its mechanism, and the closed-loop stability criterion are the contribution.
 
 ## 4. Methodology
 
@@ -52,194 +57,198 @@ flowchart LR
     M --> E[0/1 error]
     E --> T{trigger?}
     T -- "A: never" --> S
-    T -- "B/C/C'/C_cond: PHT or shared schedule" --> W[retrain window]
-    T -- "C_early: PHT_recon or PHT_class" --> W
-    T -- "C_freq: blind periodic clock" --> W
+    T -- "B / *_sched: PHT or shared schedule" --> W[retrain window]
+    T -- "*_early: PHT_recon or PHT_class" --> W
+    T -- "*_freq: blind periodic clock" --> W
     T -- "ARF/SRP: none (learn every sample)" --> S
     W --> G{augmenter?}
-    G -- "C: vanilla GAN" --> L[learn_one synthetic ATTACK]
-    G -- "C': bootstrap+jitter" --> L
-    G -- "C_cond: conditional WGAN-GP" --> L
-    G -- "B: none" --> S
+    G -- "C / C_cond / C': synthetic ATTACK samples" --> L[learn_one synthetic]
+    G -- "none" --> S
     L --> S
 ```
 
-**Core phases** — the proposals and their controls:
-
-| Phase | Model | Trigger | Augmentation | Role |
-|---|---|---|---|---|
-| A | HAT | none (frozen) | — | lower-bound control |
-| B | HAT | PHT / schedule | — | reactive baseline |
-| C | HAT | PHT / schedule | vanilla binary GAN | original proposal |
-| C' | HAT | PHT / schedule | bootstrap + jitter | augmentation control |
-| C_cond | HAT | PHT / schedule | subtype-conditional WGAN-GP | improved proposal |
-| C_early | HAT | dual PHT (recon + class) | optional | anticipation experiment |
-
-**Reviewer controls & baselines** — added to harden the analysis:
+**The contribution and its controls** — the comparisons that carry the claim:
 
 | Phase | Model | Trigger | Isolates |
 |---|---|---|---|
-| C_freq | HAT | blind periodic clock (matched count) | adaptation *timing* vs *frequency* |
-| C_early_mean / C_early_pca | HAT | dual PHT, monitor = mean-shift / PCA | whether the AE monitor is justified |
-| B_adwin / B_kswin | HAT | ADWIN / KSWIN | drift-detector choice |
-| ARF / SRP | ensemble | none (continuous learning) | SOTA upper bound (full supervision) |
-| ARF_sched / SRP_sched | ensemble | PHT / schedule | model capacity at a matched label budget |
-| ARF_early / SRP_early | ensemble | dual PHT (recon + class) | whether the early trigger helps a SOTA learner |
+| B / `*_sched` | HAT / ARF / SRP | PHT / shared schedule | reactive baseline (error-driven) |
+| `C_early` / `ARF_early` / `SRP_early` | HAT / ARF / SRP | dual PHT (recon + class) | **the proactive policy** |
+| `C_freq` / `ARF_freq` / `SRP_freq` | HAT / ARF / SRP | blind periodic clock, matched count | adaptation *timing* vs *frequency* |
+| `ARF` / `SRP` | ensemble | none (continuous learning) | upper bound at full supervision |
+| `C_early_pca` / `_mean` / `_d3` | HAT | dual PHT, monitor swapped | which shift signal makes a good trigger |
+| `B_adwin` / `B_kswin` | HAT | ADWIN / KSWIN | drift-detector choice |
+| A | HAT | none (frozen) | lower-bound control |
 
-Details: [docs/architecture.md](docs/architecture.md) (the full component design), [docs/methodology.md](docs/methodology.md) (protocol) and [docs/gan_design.md](docs/gan_design.md) (GAN internals).
+**Original generative phases** (kept reproducible; see the note above): `C` (vanilla GAN), `C_cond` (subtype-conditional WGAN-GP) and `C'` (bootstrap+jitter, the budget-matched augmentation control).
 
-## 5. Dataset
+Details: [architecture.md](docs/architecture.md) (component design) · [methodology.md](docs/methodology.md) (protocol: schedules, recovery semantics, statistics) · [gan_design.md](docs/gan_design.md) (generative internals).
 
-CICIDS2017 (CSV export, ~2.8M flow records, ~70 numeric flow features, label column `Attack Type` with BENIGN plus attack subtypes: DoS variants, PortScan, brute force (FTP/SSH), web attacks, Bot, Infiltration, DDoS). Preprocessing per row: drop identifier columns (`Flow ID`, IPs, `Timestamp`), coerce features to float, replace ±inf/NaN with 0, binarize label to BENIGN/ATTACK keeping the raw subtype for conditioning and ground-truth schedules. The stream is read in file order starting at row 540,000 (skipping the long initial all-benign block) so that pre-training (~50K samples) is essentially benign and attack bursts arrive afterwards. The dataset is **not** included in this repository; set `csv_path` in `configs/base.yaml`.
+## 5. Datasets
+
+Three CICFlowMeter-family, naturally-drifting network captures. None is included in this repository; set `csv_path` in `configs/base.yaml` or the per-dataset profile in `configs/datasets/`.
+
+| Dataset | Window used | Why |
+|---|---|---|
+| **CICIDS2017** (anchor) | 2M samples from row 540,000 | attacks arrive in temporal blocks after a benign prefix |
+| **CIC-IDS2018** | 3M samples from row 11,000,000 | richest attack-diversity block (selected by `scripts/scan_drift_window.py`) |
+| **UNSW-NB15** | 1.7M samples from row 1,750,000 | different attack taxonomy; drift is benign↔attack bursts |
+
+Preprocessing per row: drop identifier columns (Flow ID, IPs, Timestamp), coerce features to float, replace ±inf/NaN with 0, binarize the label to BENIGN/ATTACK while keeping the raw subtype for conditioning and ground-truth schedules. IoT candidates (CICIoT2023, Edge-IIoTset) were **rejected** by a label-ordering diagnostic — one is fully shuffled (no temporal drift), the other class-sorted (covariate shift and label change coincide, so there is nothing to anticipate).
 
 ## 6. Experimental protocol
 
-- **Shared schedule**: pass 0 (Phase B dynamics) records PHT fire indices → all scheduled phases replay them; a report-only PHT measures detection delay. A label-derived ground-truth schedule is available for sensitivity analysis. C_early is exempt (its claim is anticipation).
-- **Seeds**: ≥5 per phase (`--seeds 0,1,2,3,4`), seeding python/numpy/torch/HAT/augmenters.
-- **Metrics**: rolling F1 (window 5,000) snapshots every 500 samples; per-event RT (θ=0.9, k=3 sustained), AUD, min-F1, no-recovery (H=50,000); lead time and anticipated-FP/missed-anticipation rates for C_early; latency p50/p95/p99/max with per-component breakdown; peak RSS.
-- **Statistics**: percentile-bootstrap 95% CIs; Wilcoxon signed-rank paired by drift index; Cliff's delta and r effect sizes.
-- **Reviewer experiments** (beyond the six core phases): a frequency-matched adaptation control (`C_freq`); a monitor ablation replacing the autoencoder with cheap covariate-shift statistics, first offline (signal-detectability frontier) then in the full pipeline (`C_early_mean`, `C_early_pca`); SOTA baselines (`ARF`/`SRP` continuous, `B_adwin`/`B_kswin` detectors) and their budget-matched variants (`ARF_sched`/`SRP_sched`); and resource/latency profiling plus C_early operating-point sensitivity from the persisted recon-error series.
+- **Shared schedule**: pass 0 (Phase B dynamics) records PHT fire indices → scheduled phases replay them, making per-event pairing valid; a report-only PHT measures detection delay. The `*_early` phases are exempt by design (their claim is anticipation).
+- **Seeds**: 5 per phase (`--seeds 0,1,2,3,4`), seeding python/numpy/torch/model/monitor.
+- **Metrics**: rolling F1 (window 5,000) snapshotted every 500 samples; *overall local F1* = mean valid-window F1 (windows with no positive label are undefined and excluded, never counted as 0); per-event RT/AUD/min-F1/no-recovery; anticipation lead time and false-alarm rate; prequential Kappa-M and Kappa-Temporal; latency percentiles and peak RSS.
+- **Statistics**: paired-t and percentile-bootstrap 95% CIs paired by seed; Wilcoxon signed-rank paired by drift index; Cliff's delta. Under bimodal outcomes (see §8, experiment 7) per-seed values and collapse counts are reported instead of a mean ± CI, which would be misleading.
+- **Calibration discipline**: every monitor's PHT threshold is calibrated on its own cached score series to match the reference fire count, so arms differ in the *signal*, not in how often they fire.
 
 ## 7. Reproducing the results
 
 ```bash
 git clone <repo> && cd DriftGAN
-# 1. install uv (https://docs.astral.sh/uv/) then:
-make setup                 # creates .venv from uv.lock
+make setup                 # creates .venv from uv.lock (needs uv)
 make test                  # unit + end-to-end synthetic smoke tests
-# 2. obtain CICIDS2017 CSV and point configs/base.yaml:csv_path at it
-make smoke                 # 10K-sample sanity run against the real CSV
-# 3. full experiment
-make schedule              # pass 0: build the shared drift schedule
-make run-all SEEDS=0,1,2,3,4
-make report                # tables + figures under results/report/
-# 4. reviewer experiments + baselines (optional, hours for ARF/SRP)
-make run-C-freq            SEEDS=0,1,2,3,4   # frequency-matched control (#1)
-make run-sota              SEEDS=0,1,2,3,4   # ADWIN/KSWIN + ARF/SRP (#3)
-make run-sota-matched      SEEDS=0,1,2,3,4   # budget-matched ARF/SRP (#3b)
-make run-early-ensemble    SEEDS=0,1,2,3,4   # ARF/SRP + proactive early trigger (#3c)
-uv run python run_experiment.py --phase C_early_mean --seeds 0,1,2,3,4 --n-jobs 5  # monitor ablation (#2)
-uv run python run_experiment.py --phase C_early_pca  --seeds 0,1,2,3,4 --n-jobs 5
-# 5. publication figures (from the runs above)
-uv run python scripts/paper_figures.py       # fig1-3, fig6, fig8-10 (verdict + ablations)
-uv run python scripts/reviewer_analysis.py   # fig4 resources, fig5 sensitivity
-uv run python scripts/monitor_ablation.py    # fig7 monitor detectability frontier
+# point configs/base.yaml:csv_path at your CICIDS2017 CSV, then:
+make smoke                 # 10K-sample sanity run
+
+# core experiment
+make schedule && make run-all SEEDS=0,1,2,3,4
+make report                                        # tables + figures
+
+# controls and baselines
+make run-C-freq         SEEDS=0,1,2,3,4            # frequency control (exp 1)
+make run-sota           SEEDS=0,1,2,3,4            # ADWIN/KSWIN + ARF/SRP (exp 3)
+make run-sota-matched   SEEDS=0,1,2,3,4            # budget-matched ARF/SRP (exp 3b)
+make run-early-ensemble SEEDS=0,1,2,3,4            # ARF/SRP + proactive trigger (exp 3c)
+
+# external validity (exp 4)
+make schedule-2018 && make run-min-2018
+make schedule-unsw && make run-min-unsw
+
+# timing vs frequency on the external datasets (exp 6)
+uv run python run_experiment.py --phase ARF_freq --dataset cicids2018 --seeds 0,1,2,3,4 --n-jobs 5 --periodic-adapt-interval 11587
+uv run python run_experiment.py --phase SRP_freq --dataset cicids2018 --seeds 0,1,2,3,4 --n-jobs 5 --periodic-adapt-interval 11505
+uv run python run_experiment.py --phase ARF_freq --dataset unsw       --seeds 0,1,2,3,4 --n-jobs 5 --periodic-adapt-interval 9549
+uv run python run_experiment.py --phase SRP_freq --dataset unsw       --seeds 0,1,2,3,4 --n-jobs 5 --periodic-adapt-interval 9857
+
+# unsupervised comparator (exp 7)
+uv run python run_experiment.py --phase C_early_d3 --seeds 0,1,2,3,4 --n-jobs 5
+
+# analyses and figures
+uv run python scripts/tier0_analysis.py        # CIs, Kappa, event stratification
+uv run python scripts/tier1_analysis.py        # timing vs frequency decomposition
+uv run python scripts/comparator_analysis.py   # monitor comparison + stability
+uv run python scripts/paper_figures.py         # fig1-3, 6, 8-13
+uv run python scripts/reviewer_analysis.py     # fig4 resources, fig5 sensitivity
+uv run python -m scripts.synthetic_clustering --all   # pre-registered synthetic
 ```
 
-Each run writes `results/runs/<phase>/seed_<s>/` with `manifest.json` (git hash, config hash, CSV SHA-256, package versions), `snapshots.parquet`, `drift_events.json`, `cost.json`, `trace.csv.gz`, and per-event recovery parquet under `results/recovery/`.
+Each run writes `results/runs/[<dataset>/]<phase>/seed_<s>/` with `manifest.json` (git hash, config hash, CSV SHA-256, package versions), `snapshots.parquet`, `drift_events.json`, `cost.json`, `trace.csv.gz`, plus per-event recovery under `results/recovery/`. `results/` is gitignored.
 
 ## 8. Results
 
-Full 5-seed run over the ~2M-sample stream (`make report` → `results/report/`; publication figures under `results/report/paper/`). Core phases:
+### 8.1 The proactive trigger across datasets and learners
 
-| Phase | F1_final | mean_RT | mean_AUD | no_recovery | p95 latency (ms) | peak RSS (MB) |
-|---|---|---|---|---|---|---|
-| A (frozen) | 0.362 | — | — | — | 0.12 | 776 |
-| B (reactive PHT) | 0.788 | 433 | 1246 | 0.66 | 0.39 | 780 |
-| C (vanilla GAN) | 0.789 | 477 | 1370 | 0.66 | 0.46 | 1365 |
-| C_cond (WGAN-GP) | 0.768 | 396 | 1588 | 0.69 | 0.29 | 1558 |
-| C' (bootstrap+jitter) | 0.769 | 392 | 1667 | 0.69 | 0.28 | 779 |
-| C_early (gen. monitor) | **0.986** | 1094* | 3701* | 0.71 | 0.47 | 1397 |
+Overall local F1, reactive → proactive, 5 seeds ([experiment 4](docs/experiments/05-external-validity.md)):
 
-\* C_early's RT/AUD are confounded: it adapts proactively and is schedule-exempt, so per-event pairing is weak (few paired events). Its fair headline is final/sustained F1 and lead time, not RT/AUD.
+| Base learner | CICIDS2017 | CIC-IDS2018 | UNSW-NB15 |
+|---|---|---|---|
+| HAT | 0.573 → 0.595 (+0.022) | 0.830 → 0.901 (+0.071) | 0.463 → 0.474 (+0.011) |
+| ARF | 0.718 → 0.748 (+0.030) | 0.913 → 0.926 (+0.013) | 0.597 → 0.658 (+0.061) |
+| SRP | 0.733 → **0.769** (+0.037) | 0.925 → 0.929 (+0.004) | 0.695 → **0.746** (+0.050) |
 
-**Two firm findings.**
+Positive in all 9 cells. Under paired CIs ([experiment 6](docs/experiments/06-timing-vs-frequency.md)) the effect is **robust in all six ensemble cells** — the three non-robust cells are the high-variance HAT ones. Aggregated over cells: **+0.033 [+0.015, +0.051]**. Prequential Kappa-M and Kappa-Temporal are positive in all nine.
 
-1. **GAN-based *adaptation* is a null result.** Paired Wilcoxon on the shared schedule: C vs B is statistically indistinguishable (RT p=0.62, AUD p=0.62); C_cond and C' are *worse* on AUD with negligible effect sizes (|Cliff's δ| < 0.07). Feature-scale collapse (which had made the vanilla and conditional GANs byte-identical) was fixed first, so this is a genuine negative, not a bug. **Conclusion: sample *quantity/quality* from the GAN does not improve drift recovery over the reactive baseline.**
-2. **The generative *early-detection* monitor (C_early) is the positive result.** Final F1 0.986 (tight across seeds), with genuinely positive anticipation lead times (~6–9K samples). Its advantage is concentrated in the drift-dense second half of the stream (local F1 +0.10–0.14 over B). Two controls confirm the mechanism: a **frequency-matched control** (C_freq, blind periodic clock at the same adaptation count) collapses *below* the reactive baseline — so the gain is *when* it adapts, not *how often*; and swapping the autoencoder for a **linear PCA monitor nearly matches it** (final 0.969 vs 0.986) while a trivial mean-shift monitor does not (0.778) — the generative model is over-engineered but a reconstruction signal is needed. Honest caveat: the anticipation *recall* at the operating point is modest (~0.23 — it foresees about a quarter of drifts).
+### 8.2 Timing or just frequency?
 
-**State-of-the-art context.** Self-adapting streaming ensembles (Adaptive Random Forest, Streaming Random Patches) reach ~1.00 final and 0.77–0.81 sustained F1, above C_early's 0.60 sustained — but they learn on *every* sample (~2M supervised updates). Budget-matched to the reactive baseline's ~233 triggered adaptations, they still score 0.72–0.73 (vs B/C_early ≈ 0.57–0.60): **the SOTA lead is driven mainly by model capacity, not by continuous supervision** (which adds only ~0.05–0.08). Alternative drift detectors (ADWIN, KSWIN) do *not* beat plain Page-Hinkley.
+A blind periodic clock, fire-count matched to the proactive arm, splits the reported gain into a frequency part and a timing part:
 
-**The anticipation idea generalizes across base learners.** Driving each base learner with the proactive early-detection trigger instead of a reactive one improves *every* model — and more for the stronger ones — while using *fewer* adaptations (base-learner × trigger, overall local F1):
+| Dataset | Learner | fires sched/freq/early | F1 sched/freq/early | **Δ timing** (early−freq) | verdict |
+|---|---|---|---|---|:---:|
+| CIC-IDS2018 | ARF | 124 / 254 / 255 | 0.913 / 0.888 / 0.926 | **+0.038** [+0.038, +0.039] | **timing** |
+| CIC-IDS2018 | SRP | 124 / 256 / 256 | 0.925 / 0.881 / 0.929 | **+0.048** [+0.046, +0.049] | **timing** |
+| UNSW-NB15 | ARF | 117 / 172 / 173 | 0.597 / 0.655 / 0.658 | +0.002 [−0.009, +0.014] | ~freq |
+| UNSW-NB15 | SRP | 117 / 167 / 167 | 0.695 / 0.743 / 0.746 | +0.002 [−0.005, +0.009] | ~freq |
 
-| Base learner | reactive trigger | proactive early trigger | Δ | adaptations |
-|---|---|---|---|---|
-| HAT | 0.573 (B) | 0.595 (C_early) | +0.022 | 233 → 161 |
-| ARF | 0.718 (ARF_sched) | 0.748 (ARF_early) | +0.030 | 233 → 113 |
-| SRP | 0.733 (SRP_sched) | **0.769** (SRP_early) | **+0.037** | 233 → **91** |
+On CIC-IDS2018 adapting *more* on a blind clock is actively **worse than the sparser reactive baseline** (0.881 vs 0.925) — the benefit is genuinely *where* adaptation lands. On UNSW-NB15 the gain is frequency. The split is consistent across two independent learners, so it is a property of the dataset; two **pre-specified** synthetic experiments could not isolate a drift-structure mechanism, and per the pre-registered decision rule **no mechanism is claimed**. The second synthetic does corroborate the core result (+0.21 informed vs blind at matched frequency).
 
-So proactive generative-monitor-triggered adaptation is **not a crutch for a weak base learner** — it improves the SOTA ensemble too, and more label-efficiently (SRP reaches 0.769 sustained F1 with only 91 adaptations, approaching continuous SRP's 0.811 at ~2M updates). This is the paper's constructive result: the early monitor is a cheap, model-agnostic add-on that raises sustained detection quality at a fraction of the adaptation budget.
+### 8.3 What makes a good trigger: closed-loop stability
 
-Figures: `fig1` local-F1 trajectory, `fig2` recovery comparison, `fig3` lead-time & cost/benefit, `fig4` resource/latency profile, `fig5` operating-point sensitivity, `fig6` frequency-control ablation, `fig7` monitor detectability frontier, `fig8` SOTA baselines, `fig9` monitor swapped in-pipeline, `fig10` budget-matched SOTA, `fig11` early-trigger × base-learner 2×2, `fig12` external-validity 2×2 across datasets.
+All monitors share the pipeline, learner and policy, each calibrated to the same fire count ([experiment 7](docs/experiments/07-unsupervised-comparator.md)):
 
-### External validity (CIC-IDS2018 + UNSW-NB15)
+| Monitor | local F1 median | collapsed seeds | FPR med / worst | train atk% |
+|---|---:|---:|---:|---:|
+| autoencoder | 0.605 | **0/5** | 0.006 / 0.007 | 0.26 |
+| PCA linear | 0.620 | 2/5 | 0.006 / 0.657 | 0.38 |
+| mean-shift | 0.504 | 2/5 | 0.007 / 0.653 | 0.37 |
+| **D3** (CIKM'19) | 0.395 | **4/5** | 0.540 / 0.595 | 0.41 |
 
-The 3c result — the proactive early trigger beats the reactive schedule for
-every base learner — was tested on two more naturally-drifting
-CICFlowMeter-family datasets (5 seeds each, the same minimal
-B/C_early/ARF_sched/ARF_early/SRP_sched/SRP_early 2×2 as 2017; dataset choice
-was evidence-driven — a label-ordering diagnostic rejected two IoT candidates
-as either fully shuffled or class-sorted with no genuine drift to
-anticipate). **The direction holds in all 9 (dataset × base-learner) cells**:
-proactive overall local F1 beats reactive for HAT, ARF and SRP on CICIDS2017,
-CIC-IDS2018 and UNSW-NB15 alike. What does *not* generalize: on 2017 the
-proactive trigger uses *fewer* adaptations than the reactive schedule, but on
-2018/UNSW it fires *more* — so "the same gain at a fraction of the adaptation
-budget" is a 2017-specific finding, not universal; likewise 2017's
-"gains grow with model strength" pattern reverses on 2018 (a ceiling effect —
-the ensembles already sit at F1 0.91–0.93 there). See
-[experiment 4](docs/experiments/05-external-validity.md) for the full tables,
-setup and caveats.
+**Mechanism (verified, not hypothesised).** Badly placed triggers open training windows over attack-dense stretches, feeding the learner **43–47% attack against a 20% base rate**; its prior skews toward ATTACK, the false-positive rate on benign traffic reaches **0.49–0.66**, the class-PHT then fires constantly (246 vs 113) and adaptation runs away. `train atk%` tracks the collapse count monotonically. A unit test pins D3's root cause: its *linear* discriminator detects mean shifts (AUC 0.93–1.00) but is blind to variance-only change (AUC 0.50), which reconstruction error captures.
 
-![External validity across datasets](docs/figures/fig12_external_validity.png)
+This **revises [experiment 2](docs/experiments/02-monitor-ablation.md)** ("a cheap PCA monitor suffices"), which was read off *final F1* — a metric that masks mid-stream collapse (PCA seed 1: final F1 0.948, cumulative accuracy 0.444, FPR 0.657). Judged on closed-loop stability the autoencoder earns its place. It also sharpens the thesis: bad placement does not merely fail to help, it *destroys* the model by biasing what it trains on.
 
-**Full per-experiment analysis** (question · setup · numbers · figures · honest interpretation · caveats) lives in [docs/experiments/](docs/experiments/): [core run](docs/experiments/00-core-run.md) · [frequency control](docs/experiments/01-frequency-control.md) · [monitor ablation](docs/experiments/02-monitor-ablation.md) · [SOTA baselines](docs/experiments/03-sota-baselines.md) · [budget-matched SOTA](docs/experiments/03b-budget-matched.md) · [ensemble + anticipation](docs/experiments/03c-early-ensemble.md) · [resources & sensitivity](docs/experiments/04-resources-sensitivity.md) · [external validity](docs/experiments/05-external-validity.md).
+### 8.4 State-of-the-art context
+
+Self-adapting ensembles (ARF, SRP) reach 0.77–0.81 sustained F1 learning on *every* sample (~2M supervised updates). Budget-matched to the reactive baseline's ~233 triggered adaptations they still score 0.72–0.73 (vs ~0.57–0.60 for the single tree): **the ensemble lead is driven mainly by model capacity, not continuous supervision**, which adds only ~0.05–0.08. Alternative error-based detectors (ADWIN, KSWIN) do not beat plain Page-Hinkley.
+
+Figures: `fig1` local-F1 trajectory · `fig2` recovery comparison · `fig3` lead-time & cost/benefit · `fig4` resources · `fig5` sensitivity · `fig6` frequency control · `fig7` monitor frontier · `fig8` SOTA · `fig9` monitor in-pipeline · `fig10` budget-matched SOTA · `fig11` trigger × base-learner · `fig12` external validity · `fig13` timing vs frequency · `fig14b` synthetic clustering.
+
+**Full per-experiment analysis** (question · setup · numbers · figures · honest interpretation · caveats): [docs/experiments/](docs/experiments/).
 
 ## 9. Discussion
 
-Interpretation and limitations:
-
-- **What does and does not work.** GAN-based *adaptation* is null (a stronger augmenter is not the answer); the generative early-detection *monitor* works but is over-engineered (cheap linear PCA nearly matches the autoencoder). The transferable idea is the **proactive early trigger** itself: it improves every base learner tested (HAT, ARF, SRP), most for the strongest, at a fraction of the adaptation budget. The contribution is a cheap, model-agnostic *when-to-adapt* signal, not a generative augmenter.
-- **Base learner matters more than the augmenter.** Swapping the single HAT for an ensemble at the same sparse budget gains far more (≈ +0.15 sustained F1) than any augmentation strategy did (≈ 0). The practical recipe is therefore **ensemble base learner + proactive drift-triggered adaptation** (`SRP_early`: 0.769 sustained with 91 adaptations), not GAN augmentation on a single tree.
-- **Label budget vs continuous supervision**: ensembles retain ~90–95% of their continuous-learning performance with sparse drift-triggered adaptation, so "adapt only when drift is anticipated" is a reasonable, label-efficient regime — reported with the adaptation budget explicit rather than as a like-for-like F1 race against continuous SOTA.
-- **Schedule bias**: the shared schedule is derived from B's dynamics; it makes pairing valid but slightly favors strategies that behave like B. The label-derived schedule bounds this effect.
-- **Oracle labels**: prequential evaluation assumes labels arrive immediately after prediction; in real IDS deployments labels are delayed or partial. All phases share this assumption, so comparisons remain internally valid.
-- **GAN scale**: buffers of 5–500 samples are extreme for GAN training; the C' control exists precisely because "the GAN worked" is not credible without it — and indeed it did not.
-- **Cross-dataset scope**: the *direction* of the proactive-trigger result replicates on CIC-IDS2018 and UNSW-NB15 (all 9 cells positive, §8), but the *magnitude* and the label-efficiency are CICIDS2017-specific — the "fewer adaptations" claim does not generalize. All three datasets are CICFlowMeter-family, natural-drift network captures; IoT streams (CICIoT2023, Edge-IIoTset) were excluded because they lack usable temporal drift.
+- **The transferable idea is the policy, not the signal.** Reconstruction-error drift detection already exists; what this work adds is using it as a *when-to-adapt* trigger, the controls that separate timing from frequency and capacity, and the finding that trigger quality must be measured in the loop.
+- **Judge triggers by closed-loop stability.** Monitors indistinguishable on detection metrics differ starkly as triggers (0/5 vs 4/5 collapses). The failure mode is specific and operationally fatal for an IDS — a 0.49–0.66 false-positive rate — and it is caused by the trigger biasing the learner's training distribution. No paper in the unsupervised-drift literature we surveyed reports this.
+- **Metric choice can hide failure.** Final-window F1 masked a mid-stream collapse that cumulative accuracy and FPR expose. Report a metric that can see the whole stream.
+- **Base learner matters more than the augmenter.** Swapping the single tree for an ensemble at the same sparse budget gains ≈ +0.15 sustained F1 — far more than any augmentation strategy did. The practical recipe is ensemble + proactive triggered adaptation.
+- **Scope and limits.** The timing claim holds on CICIDS2017/2018; on UNSW-NB15 the benefit is frequency. Anticipation recall at the operating point is modest (~0.23). The shared schedule is derived from B's dynamics, which slightly favours B-like strategies (bounded by the label-derived schedule). Prequential evaluation assumes immediate labels — unrealistic in deployment, though all phases share the assumption, so comparisons stay internally valid. All three datasets are CICFlowMeter-family.
+- **Negative results are reported.** Generative augmentation under triggered adaptation (§4 note), and two pre-specified synthetic experiments that failed to establish a drift-structure mechanism. Both remain reproducible in this repository.
 
 ## 10. Repository structure
 
 ```
 src/driftgan/
-├── config.py          # YAML config resolution (base + phase overrides), run dirs, hashes
-├── logging.py          # JSON-line structured logging
-├── data/stream.py       # streaming CSV reader + row preprocessing
+├── config.py             # YAML resolution (base ← phase ← dataset ← CLI), run dirs, hashes
+├── logging.py            # JSON-line structured logging
+├── data/stream.py        # streaming CSV reader + row preprocessing
 ├── models/
 │   ├── hat.py            # HAT factory (identical hyperparams across HAT phases)
-│   └── streaming.py      # model factory: HAT vs ARF/SRP ensembles (+ continuous phases)
-├── drift/schedule.py      # shared schedules; dynamic-PHT / detector / periodic / scheduled triggers
-├── augment/               # base protocol + FeatureScaler, bootstrap_jitter, vanilla_gan, wgan_gp, cgan
+│   └── streaming.py      # model factory: HAT vs ARF/SRP ensembles
+├── drift/schedule.py     # shared schedules; dynamic-PHT / detector / periodic / scheduled triggers
+├── augment/              # base protocol + FeatureScaler, bootstrap_jitter, vanilla_gan, wgan_gp, cgan
 ├── early/
 │   ├── reconstruction_monitor.py  # autoencoder monitor (AE)
-│   ├── shift_monitors.py          # cheap ablations + D3 comparator: PCA / KS / MMD / mean-shift / D3
+│   ├── shift_monitors.py          # PCA / KS / MMD / mean-shift + D3 comparator
 │   └── dual_pht.py                # dual PHT + lead-time pairing
-├── metrics/               # rolling (O(1) F1), recovery (RT/AUD), cost
-├── experiments/           # runner (unified engine), seeding, manifest, stats
-└── viz/plots.py           # stream comparison, boxplots, RT CDF, Pareto
-configs/                 # base.yaml + one YAML per phase (core + reviewer/SOTA/ablation phases)
-scripts/                 # make_report, paper_figures, reviewer_analysis, monitor_ablation;
-                         # tier0/tier1/comparator analyses, synthetic_{structure,clustering}
-docs/                    # architecture.md, methodology.md, gan_design.md, figures/, experiments/*.md, paper/
-tests/                   # pytest: recovery, schedule/triggers, early monitors, models, stats, augment, e2e
-run_experiment.py        # multi-seed CLI (also builds the schedule: --build-schedule)
-Makefile                 # setup / test / lint / smoke / schedule / run-* / run-sota[-matched] / report
+├── metrics/              # rolling (O(1) F1), recovery (RT/AUD), cost
+├── experiments/          # runner (unified engine), seeding, manifest, stats
+└── viz/plots.py          # stream comparison, boxplots, RT CDF, Pareto
+configs/                  # base.yaml + one YAML per phase + datasets/<name>.yaml profiles
+scripts/                  # analyses: tier0, tier1, comparator, monitor_ablation, reviewer;
+                          # figures: paper_figures, make_report; synthetics; scan_drift_window
+docs/                     # paper/ (idea-central, related-work), experiments/*.md,
+                          # architecture.md, methodology.md, gan_design.md, figures/
+tests/                    # pytest: recovery, schedule/triggers, early monitors, models, stats, augment, e2e
+run_experiment.py         # multi-seed CLI (also builds the schedule: --build-schedule)
+Makefile                  # setup / test / lint / smoke / schedule / run-* / report
 ```
 
 ## 11. Future work
 
-- **Second/third dataset** (2018 + UNSW done, §8): extend to CIC-DDoS2019, and randomize attack-block ordering to decouple results from each dataset's specific sequence. Recover the label-efficiency that held on 2017 but not on 2018/UNSW (tune the dynamic trigger so it does not over-fire on denser-drift streams).
-- Label-delay simulation (labels arriving k samples late) to stress the prequential assumption — currently all phases assume immediate labels.
-- Pair a lightweight ensemble with the sparse triggered-adaptation regime (the budget-matched SOTA runs suggest model capacity, not continuous supervision, drives the ensemble lead).
-- Adaptive `n_synthetic` per event (scale with buffer size / detector confidence).
-- Diffusion or flow-based generators as drop-in augmenters; use the monitor's latent drift direction to *select* which buffer samples to train the GAN on.
-
-(Done since the initial draft: per-feature standardization inside the GAN augmenters — `augment/base.py:FeatureScaler` — which fixed a feature-scale collapse that had made the vanilla and conditional GANs produce identical output.)
+- **Recover a generalizable efficiency claim** — cap the proactive arm's fire count to the reactive one per dataset, testing whether it still wins with *no more* adaptations (on CICIDS2017 it already uses fewer; on 2018/UNSW it fires more).
+- **Raise anticipation recall** (~0.23 today) by fusing complementary shift statistics — the stability result suggests the *combination* matters more than any single signal.
+- **Make stability a design target**: rebalance or reweight triggered windows so a mis-timed trigger cannot skew the learner's class prior.
+- **A second published comparator** (HDDDM) and a faithful `(w, ρ)` D3 with its native threshold, to separate "this signal" from "our adaptation of it".
+- **Label-delay simulation** (labels arriving *k* samples late) to stress the prequential assumption.
+- **A fourth dataset** (CIC-DDoS2019) and randomized attack-block ordering, to decouple results from each capture's specific sequence.
 
 ## 12. Citation
 
 ```bibtex
 @misc{driftgan2026,
-  title  = {DriftGAN: GAN-assisted concept-drift adaptation for streaming intrusion detection},
+  title  = {When to adapt: a cheap unsupervised covariate-shift trigger
+            for streaming intrusion detection},
   author = {Lara Guti\'errez, Antonio},
   year   = {2026},
   note   = {https://github.com/antoniol00/DriftGAN}
