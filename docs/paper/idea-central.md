@@ -227,9 +227,21 @@ detection metrics.
 
 ---
 
+## Naming
+
+The method is **PACE** — *Proactive Adaptation via Covariate-shift Estimation* —
+and the project/repository is **PACE Drift** (`pace-drift`). The name encodes the
+thesis: what the evidence supports is a claim about the *pacing* of adaptation
+(when it fires, and that firing more often is not the same as firing better), not
+about generation. The original name, *DriftGAN*, described the hypothesis we
+started with rather than the result we reached.
+
+The Python package remains `driftgan` for import stability; that is deliberate,
+so `src/driftgan/...` references throughout these docs are correct.
+
 ## Working title
 
-**When to adapt matters more than what to generate: a cheap unsupervised
+**When to adapt matters more than what to generate: PACE, a cheap unsupervised
 covariate-shift trigger for streaming intrusion detection.**
 
 *Contributions:* (i) a controlled refutation of generative augmentation under

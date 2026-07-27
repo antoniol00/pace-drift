@@ -1,8 +1,9 @@
 # Related work and the unsupervised comparator
 
-*The section that decides whether this paper is publishable.* Our monitor is,
-functionally, an unsupervised drift detector. If the related work does not place
-us precisely against that family — and if we do not compare against a published
+*The section that decides whether this paper is publishable.* **PACE**
+(*Proactive Adaptation via Covariate-shift Estimation*) is, at the level of its
+signal, an unsupervised drift detector. If the related work does not place us
+precisely against that family — and if we do not compare against a published
 member of it — a reviewer closes with "this is unsupervised drift detection
 triggering retraining, which already exists." This document does both:
 §1–§4 position the work, §5 states the honest delta, §6 is the comparator

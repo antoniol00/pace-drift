@@ -1,9 +1,11 @@
-# Proposed architecture
+# Architecture
 
-This document describes the architecture that all experiments share. The design
-goal is that **every phase runs through one prequential engine** and differs only
-in a few pluggable components, so any difference in results is attributable to
-those components and nothing else. Protocol-level detail (schedule construction,
+This document describes the architecture that all experiments share, and in which
+**PACE** (*Proactive Adaptation via Covariate-shift Estimation*) is one
+configuration of the trigger and monitor slots. The design goal is that **every
+phase runs through one prequential engine** and differs only in a few pluggable
+components, so any difference in results is attributable to those components and
+nothing else. Protocol-level detail (schedule construction,
 recovery-metric semantics, statistics) lives in [methodology.md](methodology.md);
 GAN internals in [gan_design.md](gan_design.md); the per-experiment results in
 [experiments/](experiments/).

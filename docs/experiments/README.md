@@ -1,5 +1,11 @@
 # Experiments
 
+The trail behind **PACE** (*Proactive Adaptation via Covariate-shift
+Estimation*), in the order the questions were actually asked. Phase names are the
+implementation-level identifiers: the PACE policy is `C_early` on the HAT and
+`ARF_early` / `SRP_early` on the ensembles, measured against the reactive
+baseline (`B`, `*_sched`) and the frequency-matched blind clock (`*_freq`).
+
 Each document states the **question**, the **setup**, the **results** (numbers +
 figure), an honest **interpretation**, and the **caveats**. All numbers are the
 mean over 5 seeds on the full ~2M-sample CICIDS2017 stream. The primary quality

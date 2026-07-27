@@ -1,8 +1,10 @@
-# DriftGAN — *When to adapt*: a cheap unsupervised covariate-shift trigger for streaming intrusion detection
+# PACE Drift — *When to adapt*: a cheap unsupervised covariate-shift trigger for streaming intrusion detection
 
-**Abstract.** Streaming intrusion detectors degrade as attack traffic drifts away from the distribution they were trained on, and the standard remedy — retraining once classification error rises — inherits the delay of labelled feedback. This project treats **when to adapt** as a design decision in its own right: an unsupervised monitor watches the reconstruction error of *incoming traffic* and triggers adaptation before the error signal responds, with learning confined to short triggered windows instead of continuous supervision. The claim is validated prequentially on three intrusion-detection datasets (CICIDS2017, CIC-IDS2018, UNSW-NB15) × three streaming learners (HAT, ARF, SRP), 5 seeds each, under **budget-matched controls** that separate adaptation *timing* from adaptation *frequency* and from *model capacity*. The proactive trigger improves sustained detection quality in all nine cells, and a frequency-matched blind clock isolates timing as the cause on CICIDS2017/2018. A final experiment shows that trigger quality must be judged by **closed-loop stability**, not detection accuracy: monitors that detect comparably — including a published unsupervised detector — can drive the learner into a catastrophic false-positive regime. See [Results](#8-results).
+**PACE** — *Proactive Adaptation via Covariate-shift Estimation*.
 
-> **Note on the name.** The project began as *DriftGAN*, testing whether GANs could improve drift **adaptation** (generating synthetic samples of a new attack) and **anticipation**. Under budget-matched controls the generative *augmentation* gave no measurable benefit, while the anticipation branch — which generates nothing — did. The repository keeps the name and the full generative code path so the controlled refutation stays reproducible, but the research contribution is the **when-to-adapt policy**. The full reasoning trail is in [docs/paper/idea-central.md](docs/paper/idea-central.md).
+**Abstract.** Streaming intrusion detectors degrade as attack traffic drifts away from the distribution they were trained on, and the standard remedy — retraining once classification error rises — inherits the delay of labelled feedback. This project treats **when to adapt** as a design decision in its own right. PACE is an unsupervised trigger: a monitor watches the reconstruction error of *incoming traffic* and initiates adaptation before the error signal responds, with learning confined to short triggered windows instead of continuous supervision. The claim is validated prequentially on three intrusion-detection datasets (CICIDS2017, CIC-IDS2018, UNSW-NB15) × three streaming learners (HAT, ARF, SRP), 5 seeds each, under **budget-matched controls** that separate adaptation *timing* from adaptation *frequency* and from *model capacity*. PACE improves sustained detection quality in all nine cells, and a frequency-matched blind clock isolates timing as the cause on CICIDS2017/2018. A final experiment shows that trigger quality must be judged by **closed-loop stability**, not detection accuracy: monitors that detect comparably — including a published unsupervised detector — can drive the learner into a catastrophic false-positive regime. See [Results](#8-results).
+
+> **Note on the name.** The project began as *DriftGAN*, testing whether GANs could improve drift **adaptation** (generating synthetic samples of a new attack) and **anticipation**. Under budget-matched controls the generative *augmentation* gave no measurable benefit, while the anticipation branch — which generates nothing — did. The project was renamed to **PACE Drift** to match what the evidence supports: the contribution is the *pacing* of adaptation, not generation. The full generative code path is kept so the controlled refutation stays reproducible, and the Python package is still `driftgan` for import stability. The full reasoning trail is in [docs/paper/idea-central.md](docs/paper/idea-central.md).
 
 ## Key results at a glance
 
@@ -106,7 +108,7 @@ Preprocessing per row: drop identifier columns (Flow ID, IPs, Timestamp), coerce
 ## 7. Reproducing the results
 
 ```bash
-git clone <repo> && cd DriftGAN
+git clone git@github.com:antoniol00/pace-drift.git && cd pace-drift
 make setup                 # creates .venv from uv.lock (needs uv)
 make test                  # unit + end-to-end synthetic smoke tests
 # point configs/base.yaml:csv_path at your CICIDS2017 CSV, then:
@@ -246,12 +248,12 @@ Makefile                  # setup / test / lint / smoke / schedule / run-* / rep
 ## 12. Citation
 
 ```bibtex
-@misc{driftgan2026,
-  title  = {When to adapt: a cheap unsupervised covariate-shift trigger
-            for streaming intrusion detection},
+@misc{pacedrift2026,
+  title  = {PACE: when to adapt --- a cheap unsupervised covariate-shift
+            trigger for streaming intrusion detection},
   author = {Lara Guti\'errez, Antonio},
   year   = {2026},
-  note   = {https://github.com/antoniol00/DriftGAN}
+  note   = {https://github.com/antoniol00/pace-drift}
 }
 ```
 

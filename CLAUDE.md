@@ -4,7 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-A concept-drift research project for network intrusion detection on CIC-IDS2017. The research goal is a novel use of GANs to improve drift *adaptation and early detection*: generating synthetic samples of a new attack from the handful of real examples available at drift time (phases C/C_cond), and testing whether a generative monitor can anticipate drift before classification error rises (phase C_early). Phases A (frozen), B (reactive PHT) and C_prime (bootstrap+jitter) are the controls the proposals are measured against. See README.md for the full picture and docs/methodology.md for protocol details.
+**PACE Drift** (repo `pace-drift`) — a concept-drift research project for streaming network intrusion detection. **PACE** = *Proactive Adaptation via Covariate-shift Estimation*: an unsupervised monitor over incoming traffic triggers adaptation *before* classification error rises, with learning gated to short triggered windows (`C_early`, `ARF_early`, `SRP_early`). The research contribution is the **when-to-adapt policy**, validated on CICIDS2017 + CIC-IDS2018 + UNSW-NB15 × HAT/ARF/SRP against budget-matched controls that separate adaptation *timing* from *frequency* (`*_freq`, blind periodic clock) and from *model capacity* (`*_sched`).
+
+The project began as *DriftGAN* (generating synthetic attack samples at drift time, phases C/C_cond); under budget-matched controls that augmentation gave no measurable benefit, and the code path is kept only so the controlled refutation stays reproducible. **Do not reframe the project around the generative angle.** Note the Python package is still `driftgan` — that is deliberate (import stability), not a leftover: `src/driftgan/` paths in docs are correct.
+
+Start with docs/paper/idea-central.md (the hypothesis→findings trail), then README.md, docs/methodology.md (protocol) and docs/experiments/ (per-experiment results).
 
 ## Environment and commands
 
