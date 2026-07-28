@@ -22,3 +22,13 @@ n_pretrain: 50000
 # a flat ceiling. Pinned so ARF_early / SRP_early share the same calibrated monitor.
 recon_pht_threshold: 0.1
 recon_pht_delta: 0.0005
+# Blind-clock cadence for the frequency-matched controls (Tier 1), pinned for the
+# same reason as in the UNSW profile. Here the calibrated values coincide with the
+# phase defaults (254 fires vs ARF_early's 253; 256 vs SRP_early's 254), but they
+# are stated explicitly so the match is a recorded decision rather than a
+# coincidence that a later edit to the phase config could break.
+by_phase:
+  ARF_freq:
+    periodic_adapt_interval: 11587
+  SRP_freq:
+    periodic_adapt_interval: 11505

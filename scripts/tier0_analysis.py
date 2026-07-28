@@ -43,7 +43,7 @@ RUNS = Path("results/runs")
 REC = Path("results/recovery")
 OUT = Path("results/report/tier0")
 OUT.mkdir(parents=True, exist_ok=True)
-SEEDS = [0, 1, 2, 3, 4]
+SEEDS = [0, 1, 2, 3, 4]  # fallback; cells resolve their own set via cell_seeds()
 
 # (dataset, base-learner label, reactive phase, proactive phase)
 CELLS = [
@@ -70,18 +70,37 @@ def rec_path(dataset: str, phase: str, seed: int) -> Path:
     return REC / f"{prefix}{phase}_{seed}.parquet"
 
 
-def per_seed_local_f1(dataset: str, phase: str) -> np.ndarray:
+def cell_seeds(dataset: str, *phases: str) -> list[int]:
+    """Seeds completed for *every* phase of a cell.
+
+    Seed counts differ by cell — the cheap cells were extended past the original
+    five, the expensive ones not always — and the comparison inside a cell is
+    paired, so each cell uses the intersection of its own phases rather than one
+    global set. The per-cell ``n`` is reported in the output tables.
+    """
+    sets = [
+        {
+            int(p.name.split("_")[1])
+            for p in run_dir(dataset, ph, 0).parent.glob("seed_*")
+            if (p / "summary.json").exists()
+        }
+        for ph in phases
+    ]
+    return sorted(set.intersection(*sets)) if sets else []
+
+
+def per_seed_local_f1(dataset: str, phase: str, seeds: list[int] | None = None) -> np.ndarray:
     """Overall local F1 (mean valid-window rolling F1) for each seed separately."""
     out = []
-    for s in SEEDS:
+    for s in seeds if seeds is not None else SEEDS:
         df = pd.read_parquet(run_dir(dataset, phase, s) / "snapshots.parquet")
         out.append(float(df.loc[df["valid"], "f1"].mean()))
     return np.array(out)
 
 
-def per_seed_n_drifts(dataset: str, phase: str) -> np.ndarray:
+def per_seed_n_drifts(dataset: str, phase: str, seeds: list[int] | None = None) -> np.ndarray:
     out = []
-    for s in SEEDS:
+    for s in seeds if seeds is not None else SEEDS:
         d = json.loads((run_dir(dataset, phase, s) / "summary.json").read_text())
         out.append(int(d["n_drifts"]))
     return np.array(out)
@@ -137,8 +156,9 @@ def paired_bootstrap_ci(deltas: np.ndarray, n_boot: int = 10000,
 def section_a() -> list[CellStat]:
     stats_out: list[CellStat] = []
     for ds, learner, r, e in CELLS:
-        f1r = per_seed_local_f1(ds, r)
-        f1e = per_seed_local_f1(ds, e)
+        seeds = cell_seeds(ds, r, e)
+        f1r = per_seed_local_f1(ds, r, seeds)
+        f1e = per_seed_local_f1(ds, e, seeds)
         d = f1e - f1r
         t_lo, t_hi = paired_ci(d)
         b_lo, b_hi = paired_bootstrap_ci(d)
@@ -152,8 +172,8 @@ def section_a() -> list[CellStat]:
             deltas=d, mean_delta=float(d.mean()),
             t_lo=t_lo, t_hi=t_hi, boot_lo=b_lo, boot_hi=b_hi,
             n_pos=int((d > 0).sum()), wilcoxon_p=float(w),
-            nd_r=float(per_seed_n_drifts(ds, r).mean()),
-            nd_e=float(per_seed_n_drifts(ds, e).mean()),
+            nd_r=float(per_seed_n_drifts(ds, r, seeds).mean()),
+            nd_e=float(per_seed_n_drifts(ds, e, seeds).mean()),
         ))
     return stats_out
 
@@ -161,20 +181,22 @@ def section_a() -> list[CellStat]:
 def render_a(rows: list[CellStat]) -> str:
     lines = ["## A. Inferential statistics on the reported reactive->proactive 2x2",
              "",
-             "Overall local F1 paired by seed (n=5). `Δ` = proactive − reactive. "
+             "Overall local F1 paired by seed. `n` is the seed count available "
+             "for that cell (both of its phases). `Δ` = proactive − reactive. "
              "`t-CI` = paired-t 95% CI; `boot-CI` = paired percentile bootstrap. "
              "`sign` = # seeds with Δ>0. `fires` = mean adaptation count "
              "(reactive→proactive); >1× means the proactive arm adapts *more* "
              "(frequency confound, to be removed in Tier 1).",
              "",
-             "| dataset | learner | F1 react | F1 proact | Δ mean | t-CI 95% | "
+             "| dataset | learner | n | F1 react | F1 proact | Δ mean | t-CI 95% | "
              "boot-CI 95% | sign | Wilcoxon p | fires r→e | verdict |",
-             "|---|---|---:|---:|---:|---|---|:---:|---:|---:|:---:|"]
+             "|---|---|---:|---:|---:|---:|---|---|:---:|---:|---:|:---:|"]
     for x in rows:
         lines.append(
-            f"| {DSET[x.dataset]} | {x.learner} | {x.f1_r:.3f} | {x.f1_e:.3f} | "
+            f"| {DSET[x.dataset]} | {x.learner} | {len(x.deltas)} | "
+            f"{x.f1_r:.3f} | {x.f1_e:.3f} | "
             f"{x.mean_delta:+.3f} | [{x.t_lo:+.3f}, {x.t_hi:+.3f}] | "
-            f"[{x.boot_lo:+.3f}, {x.boot_hi:+.3f}] | {x.n_pos}/5 | "
+            f"[{x.boot_lo:+.3f}, {x.boot_hi:+.3f}] | {x.n_pos}/{len(x.deltas)} | "
             f"{x.wilcoxon_p:.3f} | {x.nd_r:.0f}→{x.nd_e:.0f} "
             f"({x.nd_e / x.nd_r:.1f}×) | {x.verdict} |")
 
@@ -206,8 +228,12 @@ def section_b_cell(dataset: str, proactive: str) -> dict:
     """Pool proactive class-fire recovery events, split anticipated vs not."""
     antic_rows, react_rows = [], []
     recon_fp = recon_total = 0
-    for s in SEEDS:
+    for s in cell_seeds(dataset, proactive):
         rd = run_dir(dataset, proactive, s)
+        # Recovery frames are materialized by a separate pass and may lag the
+        # runs; a seed without one is skipped rather than failing the section.
+        if not rec_path(dataset, proactive, s).exists():
+            continue
         ev = json.loads((rd / "drift_events.json").read_text())["events"]
         lead = json.loads((rd / "lead_time.json").read_text())
         matched_class = {p[1] for p in lead["pairs"]}
@@ -292,7 +318,7 @@ def section_c() -> list[dict]:
     rows = []
     for ds, learner, r, e in CELLS:
         km_r, kt_r, km_e, kt_e = [], [], [], []
-        for s in SEEDS:
+        for s in cell_seeds(ds, r, e):
             for ph, kmL, ktL in ((r, km_r, kt_r), (e, km_e, kt_e)):
                 tp = run_dir(ds, ph, s) / "trace.csv.gz"
                 if tp.exists():
@@ -333,16 +359,21 @@ def main() -> None:
     md_c = render_c(c)
 
     n_robust = sum(1 for x in a if x.verdict == "ROBUST")
+    n_signif = sum(1 for x in a if x.verdict == "CI-signif")
     n_weak = sum(1 for x in a if x.verdict == "WEAK")
+    seed_ns = sorted({len(x.deltas) for x in a})
+    ns = str(seed_ns[0]) if len(seed_ns) == 1 else f"{seed_ns[0]}–{seed_ns[-1]}"
     header = [
         "# Tier 0 — statistical hardening of the reported effect",
         "",
         "Post-processing only (no re-runs). Does the reactive→proactive advantage "
         "survive inferential scrutiny before we invest Tier-1 compute?",
         "",
-        f"**Gate summary:** {n_robust}/9 cells ROBUST "
-        f"(all seeds same sign AND paired-t CI excludes 0); {n_weak}/9 WEAK "
-        "(CI straddles 0 — likely seed noise).",
+        f"**Gate summary** (n={ns} seeds per cell): {n_robust}/9 cells ROBUST "
+        f"(every seed agrees in sign *and* the paired-t CI excludes 0), "
+        f"{n_signif}/9 CI-signif (CI excludes 0 but at least one seed dissents), "
+        f"{n_weak}/9 WEAK (CI straddles 0 — likely seed noise). "
+        f"{n_robust + n_signif}/9 cells therefore have a CI excluding 0.",
         "",
     ]
     doc = "\n".join(header) + "\n" + md_a + "\n\n" + md_b + "\n\n" + md_c + "\n"

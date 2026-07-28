@@ -62,12 +62,14 @@ the **unlabelled input distribution**, which is exactly what our monitor does.
 > therefore **not** a novel detector, and the paper must not claim it is. The
 > contribution has to sit on the *policy*, not the signal.
 >
-> **But the signal is not interchangeable either** (experiment 7): at matched
-> fire count, cheaper statistics (PCA, mean-shift) and the published D3 detector
-> intermittently drive the adaptation loop into a catastrophic false-positive
-> regime, while the AE does not. So the honest statement is: *the detector is not
-> novel, but its stability inside the closed loop is what the paper measures —
-> and that is not a property any of these papers report.*
+> **And we do not rescue it by claiming ours is more stable either.** An earlier
+> 5-seed result suggested exactly that; at 20 seeds it did not hold (experiment
+> 7). What the comparator experiment does establish is different and, we think,
+> more useful: *this style of adaptation loop is **fragile** — at matched fire
+> count every trigger we tested, ours included, intermittently drives it into a
+> catastrophic false-positive regime, through a mechanism we verify. That
+> fragility is not reported by any of these papers, and it is invisible to the
+> detection metrics they do report.*
 
 ---
 
@@ -117,12 +119,18 @@ controls are rare. That methodological gap, not a new detector, is our opening.
 3. **Model-agnostic transfer at a fixed budget.** The same trigger improves HAT,
    ARF and SRP across three datasets with adaptation confined to triggered
    windows — a fraction of continuous supervision.
-4. **Closed-loop stability as a first-class criterion.** Monitors that look
-   equivalent on detection metrics are *not* equivalent as triggers: badly placed
-   adaptation windows bias the learner's training distribution toward attack
-   (43–47% vs a 20% base rate) and collapse it into a 0.5–0.66 false-positive
-   regime. We measure trigger quality by what it does to the loop, not by
-   detection accuracy — a criterion the §2 literature does not report.
+4. **Closed-loop stability as a first-class criterion — and evidence that the
+   loop is fragile.** Trigger quality has to be measured by what the trigger does
+   to the adaptation loop, not by detection accuracy, because the two come apart:
+   badly placed adaptation windows bias the learner's training distribution
+   toward attack (up to 0.44 against a 0.20 base rate) and collapse it into a
+   0.5–0.69 false-positive regime. Across 20 seeds this happens to **every**
+   trigger we tested — the published D3 and HDDDM, cheap PCA and mean-shift
+   statistics, and our own autoencoder — on 20–60% of runs. We report the
+   criterion, the mechanism, and the honest finding that our monitor is *not*
+   measurably more stable than the published alternatives (only the trivial
+   mean-shift floor separates, p=0.023). None of this is reported in the §2
+   literature.
 
 In one line: **the novelty is the policy and the controlled evidence, not the
 signal.** Framed that way the related work supports us; framed as "a new
@@ -130,61 +138,83 @@ generative drift detector" it destroys us.
 
 ---
 
-## 6. The unsupervised comparator: D3 at identical protocol
+## 6. The unsupervised comparators: D3 and HDDDM at identical protocol
 
-**Why D3.** It is the most-cited *named* unsupervised drift detector, it is
-explicitly designed to sit in front of any classifier, and its principle
+**Why these two.** D3 is the most-cited *named* unsupervised drift detector, it
+is explicitly designed to sit in front of any classifier, and its principle
 (discriminative separability of old vs new windows) is orthogonal to ours
-(reconstruction error), so the comparison is informative rather than a
-re-parameterisation. HDDDM is the natural second (distance between batch
-histograms); we treat it as future work.
+(reconstruction error). HDDDM (Ditzler & Polikar 2011) is the informative second,
+because a bin-by-bin Hellinger distance responds to a change in dispersion at
+constant mean, which a linear discriminator cannot see — so if instability were
+merely a consequence of D3's blind spot, HDDDM would be immune. It is not.
 
-**Implementation.** `D3Monitor` in `src/driftgan/early/shift_monitors.py`, run as
-phase `C_early_d3`. Deviations from the reference implementation, stated for
-reproducibility:
+**Implementation.** `D3Monitor`, `D3NativeMonitor` and `HDDDMMonitor` in
+`src/driftgan/early/shift_monitors.py`. Deviation carried by every arm: logistic
+regression is fit by L2-regularised batch gradient descent, because the project
+has no scikit-learn dependency (the reference uses
+`LogisticRegression(solver='liblinear')`).
 
-- logistic regression is fit by L2-regularised batch gradient descent, because the
-  project has no scikit-learn dependency (the reference uses
-  `LogisticRegression(solver='liblinear')`);
-- window bookkeeping is our shared monitor protocol (frozen reference frame vs
-  current buffer) instead of D3's own `(w, ρ)` roll, so that **every** monitor in
-  the ablation sees exactly the same data at exactly the same check points;
-- the discriminative principle and the **2-fold stratified AUC** estimate — the
-  parts that define the method — are preserved.
+**Two protocols, two questions.**
 
-**Protocol.** Identical to the monitor ablation (experiment 2): same pipeline,
-same base learner, same dual-PHT adaptation policy, with `PHT_recon` calibrated on
-the cached D3 score series so its fire count matches the autoencoder's. The only
-thing that changes is the shift statistic. This is the fairest possible reading:
-*given the same when-to-adapt policy, does a published unsupervised detector do
-the job as well as our monitor?*
+- *Budget-matched* (`C_early_d3`, `C_early_hdddm`): our shared monitor protocol
+  and our Page-Hinkley, with each threshold calibrated so the fire count matches
+  the autoencoder's 58. Only the shift statistic differs, so this asks whether
+  the **signal** substitutes.
+- *Native* (`C_early_d3_native`, `C_early_d3_sized`): D3 keeps its own `(w, ρ)`
+  roll, its own cadence and its own AUC threshold, and declares drift itself.
+  Deliberately not budget-matched. This asks whether the published method works
+  here **out of the box**, and it forecloses the objection that the matched arm
+  was a weakened D3.
 
-**Outcome (the middle branch of the three we pre-committed to).** D3-triggered
-adaptation proved **unstable** here: 4/5 seeds collapsed (vs 0/5 for the AE),
-while the surviving seed matched it exactly. Not a quality gap — a *stability*
-gap, and the mechanism is verified: badly placed triggers feed the learner
-43–47% attack against a 20% base rate, skewing its prior until the false-positive
-rate reaches 0.49–0.66 and the class-PHT runs away. A unit test pins the root
-cause: D3's linear discriminator is blind to variance-only change (AUC 0.50),
-which reconstruction error captures. Full write-up:
-`docs/experiments/07-unsupervised-comparator.md`; numbers:
-`results/report/comparator/analysis.md`.
+**Outcome, at 20 seeds.** Collapse counts (cumulative accuracy < 0.90):
+autoencoder **4/20**, HDDDM **5/20** (Fisher p = 1.00), PCA **6/20** (p = 0.72),
+D3 **10/20** (p = 0.096), mean-shift **12/20** (p = 0.023). Pooled, ours against
+all four alternatives is 4/20 vs 33/80, p = 0.119.
 
-Two consequences for the paper:
+Read that carefully, because an earlier 5-seed version of this experiment
+reported AE 0/5 vs D3 4/5 (p = 0.048) and we drew the wrong conclusion from it.
+**Our monitor is not measurably more stable than the published detectors.** What
+the experiment does establish:
 
-1. **It sharpens the thesis rather than threatening it.** The claim was always
-   that *where* adaptation is placed matters; this shows bad placement does not
-   merely fail to help, it actively destroys the model through training-set bias.
-2. **It revises experiment 2.** "A cheap PCA monitor suffices" was read off
-   *final F1*, which masks mid-stream collapse (PCA seed 1: final F1 0.948,
-   cumulative accuracy 0.444, FPR 0.657). Judged on closed-loop stability, the
-   autoencoder earns its place — the one arm stable in 5/5 seeds.
+1. **The loop is fragile, and that is the reportable finding.** Every trigger —
+   two published detectors, two cheap statistics and our own — collapses the
+   learner on 20–60% of seeds, through a mechanism we verify: badly placed
+   windows feed the learner up to 0.44 attack fraction against a 0.20 base rate,
+   the prior skews, the false-positive rate reaches 0.49–0.69, the class-PHT then
+   fires constantly and opens more bad windows. `train atk%` tracks the collapse
+   count monotonically across monitors. Nothing in §2 reports this.
+2. **Detection metrics do not predict it**, and neither does final-window F1
+   (PCA seed 1: final F1 0.948, cumulative accuracy 0.444, FPR 0.657). The
+   criterion has to be closed-loop.
+3. **The signal still matters at the bottom end.** The trivial mean-shift floor
+   is significantly worse than everything else, so this is not "any statistic
+   will do".
+4. **Native D3 fails differently, and worse.** At the released defaults
+   (`w=100, ρ=0.1, τ=0.7`) it fires ~12 300 times against our 169 — because with
+   a 10-sample "new" window the 2-fold AUC crosses τ on ~5% of tests over a
+   *stationary* stream (unit-tested). That is a transfer limitation of the
+   published settings to 70-feature flow data, and it saturates the loop rather
+   than misplacing it.
+5. **It reverses our own earlier revision of experiment 2.** PCA matches the
+   autoencoder on stability too (6/20 vs 4/20), so experiment 2's original
+   conclusion stands: the autoencoder is over-engineered and the paper should
+   lead with the cheap linear monitor.
 
-**Scope, stated honestly.** Ours is an *adaptation* of D3 (shared protocol,
-gradient-descent logistic regression), so this is evidence about a
-discriminative-separability signal **in our pipeline**, not a verdict on D3 as a
-detector. A faithful `(w, ρ)` D3 with its native threshold and HDDDM as a second
-comparator are future work.
+Full write-up: `docs/experiments/07-unsupervised-comparator.md`; numbers:
+`results/report/comparator/analysis.md`; figure:
+`docs/figures/fig15_closed_loop_stability.png`.
+
+**Scope, stated honestly.** These are our implementations (gradient-descent
+logistic regression rather than liblinear), and the native arms are not
+budget-matched by construction. This is evidence about what these signals do to
+**our** adaptation loop on flow data, not a verdict on the detectors in general.
+Treat the collapse counts as effect sizes on a modest number of runs: the
+ordering is the result, the individual pairwise p-values at n = 20 are not.
+
+**Methodological note we owe the reader.** A bimodal outcome needs far more
+replicates than a mean does. At n = 5 this experiment produced a clean,
+significant and *wrong* ranking, which we published to the repository and then
+had to retract. We now hold collapse-count comparisons to n ≥ 20.
 
 ---
 
@@ -193,7 +223,8 @@ comparator are future work.
 | Objection | Answer |
 |---|---|
 | "This is unsupervised drift detection + retraining; it exists." | Correct, and we say so (§2, §5). We claim the *policy* and the controls that isolate timing from frequency and capacity — not the detector. |
-| "Why not compare against unsupervised detectors?" | We do: D3 at identical protocol (§6), plus KS, MMD, PCA and mean-shift statistics in the ablation. |
+| "Why not compare against unsupervised detectors?" | We do: D3 and HDDDM at identical protocol, plus D3 with its own native window and threshold (§6), plus KS, MMD, PCA and mean-shift statistics in the ablation. |
+| "So your monitor isn't better than D3 or HDDDM." | Correct, and §6 says so. The comparator experiment is not a leaderboard — it establishes that the adaptation loop is fragile for *every* trigger, identifies the mechanism, and shows detection metrics do not predict it. |
 | "The autoencoder is a re-invention." | Acknowledged and cited (§2). Our own ablation shows it is unnecessary; the paper leads with the cheap linear monitor. |
 | "Gains are modest." | Lead with 2018, where informed timing beats a count-matched blind clock and adapting *more* blindly actively hurts; and with transfer to ARF/SRP at a fraction of the supervision. |
 | "Only 3 datasets — is the split a mechanism?" | We explicitly *decline* to claim a drift-structure mechanism: two pre-specified synthetics failed to isolate it (experiment 6). It is reported as an empirical observation. |

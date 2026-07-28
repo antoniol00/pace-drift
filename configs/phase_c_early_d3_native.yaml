@@ -1,0 +1,21 @@
+phase: C_early_d3_native
+# D3 as published, with its *own* machinery (Gozuacik et al., "Unsupervised
+# Concept Drift Detection with a Discriminative Classifier", CIKM 2019).
+#
+# `C_early_d3` runs D3's statistic inside our shared monitor protocol so it is
+# directly comparable with the other monitors, at the cost of two deviations a
+# reviewer will name: our window bookkeeping, and our Page-Hinkley taking the
+# fire decision. This arm removes both — D3 keeps its sliding window of size
+# w(1+rho), tests every w*rho samples and declares drift itself when the
+# discriminative AUC exceeds tau, discarding the old slice afterwards.
+#
+# Hyperparameters are the released defaults (reference CLI: `python D3.py
+# elec.csv 100 0.1 0.7`), so this measures D3 out of the box rather than a
+# re-tuning of it. recon_pht_* is therefore unused by this phase.
+monitor_type: d3_native
+d3_w: 100
+d3_rho: 0.1
+d3_tau: 0.7
+monitor_clip: 10.0
+lead_horizon: 20000
+early_augment: false

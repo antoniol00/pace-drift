@@ -1,0 +1,20 @@
+phase: C_early_d3_sized
+# D3 with its native machinery (as in phase_c_early_d3_native.yaml) but with the
+# window sized for the width of flow data instead of left at the released
+# default. The charitable reading of D3, so the comparison cannot be dismissed
+# as "you ran it misconfigured".
+#
+# Why it is needed: at the published w=100, rho=0.1 the "new" window holds 10
+# samples, so the 2-fold CV AUC is estimated from ~5 positives per fold and
+# crosses tau on ~5% of tests over a *perfectly stationary* stream (pinned in
+# tests/test_early.py::test_d3_native_false_alarms_at_published_defaults). The
+# D3 paper's benchmarks are far narrower than 70-feature flow records. At
+# w=1000, rho=0.2 the same check fires zero times on stationary data, so any
+# drift this arm reports is signal rather than estimator noise.
+monitor_type: d3_native
+d3_w: 1000
+d3_rho: 0.2
+d3_tau: 0.7
+monitor_clip: 10.0
+lead_horizon: 20000
+early_augment: false

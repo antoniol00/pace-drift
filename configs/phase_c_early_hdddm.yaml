@@ -1,0 +1,27 @@
+phase: C_early_hdddm
+# Second published unsupervised comparator: HDDDM (Ditzler & Polikar,
+# "Hellinger distance based drift detection for nonstationary environments",
+# IEEE CIDUE 2011), swapped in for the autoencoder monitor at the identical
+# protocol. Its statistic is the mean per-feature Hellinger distance between
+# the histograms of the reference and current windows.
+#
+# It is the informative contrast to D3: D3 asks whether a *linear boundary*
+# separates the two windows and is therefore blind to variance-only change,
+# whereas a bin-by-bin distribution distance is not. If the closed-loop
+# instability is a property of unsupervised triggers in general rather than of
+# D3's discriminative principle, HDDDM should destabilize the loop too.
+#
+# PHT_recon calibrated offline on the cached Hellinger score series over the
+# full 2017 stream (1950 checks: min 0.000, median 0.083, p90 0.133, max 0.358).
+# A fine threshold sweep gives exactly 58 fires at threshold=0.1437 /
+# delta=0.0005, matching the autoencoder's 58 -> the arms are fire-count matched
+# and only the shift statistic differs. Reproduce with:
+#   uv run python scripts/calibrate_monitor.py C_early_hdddm --reference C_early
+monitor_type: hdddm
+monitor_interval: 1000
+monitor_clip: 10.0
+recon_pht_delta: 0.0005
+recon_pht_threshold: 0.1437
+recon_pht_min_instances: 10
+lead_horizon: 20000
+early_augment: false

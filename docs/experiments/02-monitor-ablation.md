@@ -1,12 +1,20 @@
 # Experiment 2 — Monitor ablation (is the autoencoder justified?)
 
-> **⚠️ Conclusion revised by [experiment 7](07-unsupervised-comparator.md).** This
-> page judges the monitors on *final F1*, which masks mid-stream collapse: the PCA
-> arm's seed 1 shows `final_f1 = 0.948` while its cumulative accuracy is `0.444`
-> and its false-positive rate `0.657`. Judged on **closed-loop stability**, only
-> the autoencoder is stable in 5/5 seeds (PCA and mean-shift collapse in 2/5).
-> The autoencoder *is* justified — by stability, not by detection quality. Read
-> this page together with experiment 7.
+> **⚠️ Read with [experiment 7](07-unsupervised-comparator.md) — one caveat
+> stands, one revision was withdrawn.**
+>
+> *Stands:* this page judges the monitors on *final F1*, which **masks mid-stream
+> collapse** — the PCA arm's seed 1 shows `final_f1 = 0.948` while its cumulative
+> accuracy is `0.444` and its false-positive rate `0.657`. Always check cumulative
+> accuracy and FPR alongside it.
+>
+> *Withdrawn:* on 2026-07-24 experiment 7 revised the conclusion below to "the
+> autoencoder is justified by closed-loop stability", on the strength of a 5-seed
+> result (AE 0/5 collapses vs PCA 2/5). At **20 seeds** that ranking disappears:
+> AE 4/20 vs PCA 6/20, Fisher p = 0.72. **The conclusion on this page therefore
+> stands as originally written** — a reconstruction-type signal is needed, but the
+> autoencoder is over-engineered and cheap linear PCA nearly matches it, on
+> closed-loop stability as well as on detection quality.
 
 ## Question
 

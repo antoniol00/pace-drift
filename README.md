@@ -2,16 +2,16 @@
 
 **PACE** — *Proactive Adaptation via Covariate-shift Estimation*.
 
-**Abstract.** Streaming intrusion detectors degrade as attack traffic drifts away from the distribution they were trained on, and the standard remedy — retraining once classification error rises — inherits the delay of labelled feedback. This project treats **when to adapt** as a design decision in its own right. PACE is an unsupervised trigger: a monitor watches the reconstruction error of *incoming traffic* and initiates adaptation before the error signal responds, with learning confined to short triggered windows instead of continuous supervision. The claim is validated prequentially on three intrusion-detection datasets (CICIDS2017, CIC-IDS2018, UNSW-NB15) × three streaming learners (HAT, ARF, SRP), 5 seeds each, under **budget-matched controls** that separate adaptation *timing* from adaptation *frequency* and from *model capacity*. PACE improves sustained detection quality in all nine cells, and a frequency-matched blind clock isolates timing as the cause on CICIDS2017/2018. A final experiment shows that trigger quality must be judged by **closed-loop stability**, not detection accuracy: monitors that detect comparably — including a published unsupervised detector — can drive the learner into a catastrophic false-positive regime. See [Results](#8-results).
+**Abstract.** Streaming intrusion detectors degrade as attack traffic drifts away from the distribution they were trained on, and the standard remedy — retraining once classification error rises — inherits the delay of labelled feedback. This project treats **when to adapt** as a design decision in its own right. PACE is an unsupervised trigger: a monitor watches the reconstruction error of *incoming traffic* and initiates adaptation before the error signal responds, with learning confined to short triggered windows instead of continuous supervision. The claim is validated prequentially on three intrusion-detection datasets (CICIDS2017, CIC-IDS2018, UNSW-NB15) × three streaming learners (HAT, ARF, SRP), 10 seeds each, under **budget-matched controls** that separate adaptation *timing* from adaptation *frequency* and from *model capacity*. PACE improves sustained detection quality in all nine cells, and a frequency-matched blind clock isolates timing as the cause on CICIDS2017/2018. A final experiment argues that trigger quality must be judged by **closed-loop stability** rather than detection accuracy, and reports an uncomfortable finding in that frame: at matched fire count over 20 seeds, *every* trigger tested — ours, two published unsupervised detectors and two cheap statistics — intermittently drives the learner into a catastrophic false-positive regime, through a training-distribution mechanism that detection metrics and final-window F1 both conceal. See [Results](#8-results).
 
 > **Note on the name.** The project began as *DriftGAN*, testing whether GANs could improve drift **adaptation** (generating synthetic samples of a new attack) and **anticipation**. Under budget-matched controls the generative *augmentation* gave no measurable benefit, while the anticipation branch — which generates nothing — did. The project was renamed to **PACE Drift** to match what the evidence supports: the contribution is the *pacing* of adaptation, not generation. The full generative code path is kept so the controlled refutation stays reproducible, and the Python package is still `driftgan` for import stability. The full reasoning trail is in [docs/paper/idea-central.md](docs/paper/idea-central.md).
 
 ## Key results at a glance
 
-- **The proactive trigger works, and it is not a crutch for a weak model** — swapping a reactive (error-based) trigger for the unsupervised covariate-shift trigger improves sustained local F1 in **all 9 (dataset × base-learner) cells**; aggregated, **+0.033 [95% CI +0.015, +0.051]**. It is *robust* (all seeds agree in sign, paired CI excludes 0) in **all six ensemble cells**, and holds under imbalance-aware κ.
+- **The proactive trigger works, and it is not a crutch for a weak model** — swapping a reactive (error-based) trigger for the unsupervised covariate-shift trigger improves sustained local F1 in **all 9 (dataset × base-learner) cells** over 10 seeds each; aggregated, **+0.043 [95% CI +0.021, +0.065]** (sign test p=0.0039). The paired CI excludes 0 in **7/9 cells — every ensemble cell**, five of them with 10/10 seeds agreeing (Wilcoxon p=0.002); the two exceptions are the high-variance HAT cells. It holds under imbalance-aware κ in all nine.
 - **It is timing, not just frequency** — against a blind periodic clock firing the *same number of times*, informed placement gains **+0.038 (ARF) / +0.048 (SRP)** on CIC-IDS2018, where adapting more on a blind schedule actively *hurts* (0.881 vs the sparser reactive 0.925). A controlled synthetic stream reproduces the advantage (+0.21 at matched frequency).
 - **Honest scope** — on UNSW-NB15 the benefit is adaptation *frequency*, not timing (+0.002, CI straddles 0). Two **pre-specified** synthetic experiments failed to isolate a drift-structure mechanism, so the split is reported as an empirical observation and no mechanism is claimed.
-- **Trigger quality ≠ detection quality** — monitors that detect comparably behave very differently *in the loop*: collapse counts are **0/5 (autoencoder)**, 2/5 (PCA), 2/5 (mean-shift), **4/5 (D3, CIKM'19)**. Badly placed triggers feed the learner **43–47% attack against a 20% base rate**, skewing its prior until the false-positive rate reaches **0.49–0.66**.
+- **The adaptation loop is fragile, and detection metrics do not show it** — at matched fire count over 20 seeds, *every* trigger tested drives the learner into a degenerate regime on a fifth to three-fifths of runs: autoencoder **4/20**, HDDDM 5/20, PCA 6/20, D3 (CIKM'19) 10/20, mean-shift 12/20. Badly placed windows feed it up to **0.46 attack fraction against a 0.20 base rate**, skewing its prior until the false-positive rate reaches **0.60–0.70**. Our monitor is *not* measurably more stable than the published detectors — only the trivial mean-shift floor separates (p=0.022).
 - **Model capacity matters more than the augmenter** — budget-matched to ~233 sparse adaptations, ensembles still lead a single tree by ~+0.15 sustained F1, while continuous supervision (~2M updates) adds only ~0.05–0.08. The practical recipe is **ensemble + proactive triggered adaptation**.
 - **Sub-millisecond cost** — the monitor is a linear-algebra pass on a small buffer; p95 latency stays under 0.5 ms/sample.
 
@@ -152,7 +152,7 @@ Each run writes `results/runs/[<dataset>/]<phase>/seed_<s>/` with `manifest.json
 
 ### 8.1 The proactive trigger across datasets and learners
 
-Overall local F1, reactive → proactive, 5 seeds ([experiment 4](docs/experiments/05-external-validity.md)):
+Overall local F1, reactive → proactive, 10 seeds ([experiment 4](docs/experiments/05-external-validity.md)):
 
 | Base learner | CICIDS2017 | CIC-IDS2018 | UNSW-NB15 |
 |---|---|---|---|
@@ -160,7 +160,7 @@ Overall local F1, reactive → proactive, 5 seeds ([experiment 4](docs/experimen
 | ARF | 0.718 → 0.748 (+0.030) | 0.913 → 0.926 (+0.013) | 0.597 → 0.658 (+0.061) |
 | SRP | 0.733 → **0.769** (+0.037) | 0.925 → 0.929 (+0.004) | 0.695 → **0.746** (+0.050) |
 
-Positive in all 9 cells. Under paired CIs ([experiment 6](docs/experiments/06-timing-vs-frequency.md)) the effect is **robust in all six ensemble cells** — the three non-robust cells are the high-variance HAT ones. Aggregated over cells: **+0.033 [+0.015, +0.051]**. Prequential Kappa-M and Kappa-Temporal are positive in all nine.
+Positive in all 9 cells. Under paired CIs over 10 seeds ([experiment 6](docs/experiments/06-timing-vs-frequency.md)) the CI excludes 0 in **7/9 cells — every ensemble cell** — and the two exceptions are the high-variance HAT ones. Aggregated over cells: **+0.043 [+0.021, +0.065]**. Prequential Kappa-M and Kappa-Temporal are positive in all nine.
 
 ### 8.2 Timing or just frequency?
 
@@ -177,32 +177,38 @@ On CIC-IDS2018 adapting *more* on a blind clock is actively **worse than the spa
 
 ### 8.3 What makes a good trigger: closed-loop stability
 
-All monitors share the pipeline, learner and policy, each calibrated to the same fire count ([experiment 7](docs/experiments/07-unsupervised-comparator.md)):
+All monitors share the pipeline, learner and policy, each calibrated to the same fire count, over **20 seeds** ([experiment 7](docs/experiments/07-unsupervised-comparator.md)):
 
-| Monitor | local F1 median | collapsed seeds | FPR med / worst | train atk% |
+| Monitor | collapsed seeds | Fisher vs AE | FPR med / worst | train atk% |
 |---|---:|---:|---:|---:|
-| autoencoder | 0.605 | **0/5** | 0.006 / 0.007 | 0.26 |
-| PCA linear | 0.620 | 2/5 | 0.006 / 0.657 | 0.38 |
-| mean-shift | 0.504 | 2/5 | 0.007 / 0.653 | 0.37 |
-| **D3** (CIKM'19) | 0.395 | **4/5** | 0.540 / 0.595 | 0.41 |
+| autoencoder | 4/20 | — | 0.006 / 0.662 | 0.26 |
+| HDDDM (CIDUE'11) | 5/20 | 1.000 | 0.005 / 0.603 | 0.31 |
+| PCA linear | 6/20 | 0.716 | 0.006 / 0.689 | 0.37 |
+| **D3** (CIKM'19) | 10/20 | 0.096 | 0.225 / 0.595 | 0.36 |
+| mean-shift (floor) | 12/20 | **0.022** | 0.609 / 0.700 | 0.46 |
 
-**Mechanism (verified, not hypothesised).** Badly placed triggers open training windows over attack-dense stretches, feeding the learner **43–47% attack against a 20% base rate**; its prior skews toward ATTACK, the false-positive rate on benign traffic reaches **0.49–0.66**, the class-PHT then fires constantly (246 vs 113) and adaptation runs away. `train atk%` tracks the collapse count monotonically. A unit test pins D3's root cause: its *linear* discriminator detects mean shifts (AUC 0.93–1.00) but is blind to variance-only change (AUC 0.50), which reconstruction error captures.
+![Closed-loop stability by trigger](docs/figures/fig15_closed_loop_stability.png)
 
-This **revises [experiment 2](docs/experiments/02-monitor-ablation.md)** ("a cheap PCA monitor suffices"), which was read off *final F1* — a metric that masks mid-stream collapse (PCA seed 1: final F1 0.948, cumulative accuracy 0.444, FPR 0.657). Judged on closed-loop stability the autoencoder earns its place. It also sharpens the thesis: bad placement does not merely fail to help, it *destroys* the model by biasing what it trains on.
+**The finding is fragility, not a ranking.** *Every* trigger — two published detectors, two cheap statistics and ours — collapses the loop on a substantial fraction of seeds, and our monitor is not measurably more stable than the published alternatives (pooled 4/20 vs 33/80, p=0.119). Only the trivial mean-shift floor separates, so the signal matters at the bottom end but not between the sophisticated ones.
+
+**Mechanism (verified, not hypothesised).** Badly placed triggers open training windows over attack-dense stretches, feeding the learner up to **0.46 attack fraction against a 0.20 base rate**; its prior skews toward ATTACK, the worst-case false-positive rate on benign traffic reaches **0.60–0.70**, the class-PHT then fires constantly and adaptation runs away. `train atk%` broadly tracks the collapse count across monitors. Running D3 with its **own** window and threshold does not rescue it — 9/20 collapses at the released defaults, 7/20 with a window sized for the data — and at those defaults it fires ~12 300 times against our 188, because with a 10-sample "new" window its 2-fold AUC crosses τ on ~5% of tests over a *stationary* stream (unit-tested).
+
+**Metric caveat that stands:** final-window F1 masks mid-stream collapse (PCA seed 1: final F1 0.948, cumulative accuracy 0.444, FPR 0.657) — but it does not rescue the autoencoder. At 20 seeds PCA matches it on stability too, so [experiment 2](docs/experiments/02-monitor-ablation.md)'s original conclusion stands and the deployable recipe is the **cheap linear monitor**. An earlier 5-seed version of this table read 0/5 vs 4/5 and was retracted; a bimodal outcome needs n ≥ 20.
 
 ### 8.4 State-of-the-art context
 
 Self-adapting ensembles (ARF, SRP) reach 0.77–0.81 sustained F1 learning on *every* sample (~2M supervised updates). Budget-matched to the reactive baseline's ~233 triggered adaptations they still score 0.72–0.73 (vs ~0.57–0.60 for the single tree): **the ensemble lead is driven mainly by model capacity, not continuous supervision**, which adds only ~0.05–0.08. Alternative error-based detectors (ADWIN, KSWIN) do not beat plain Page-Hinkley.
 
-Figures: `fig1` local-F1 trajectory · `fig2` recovery comparison · `fig3` lead-time & cost/benefit · `fig4` resources · `fig5` sensitivity · `fig6` frequency control · `fig7` monitor frontier · `fig8` SOTA · `fig9` monitor in-pipeline · `fig10` budget-matched SOTA · `fig11` trigger × base-learner · `fig12` external validity · `fig13` timing vs frequency · `fig14b` synthetic clustering.
+Figures: `fig1` local-F1 trajectory · `fig2` recovery comparison · `fig3` lead-time & cost/benefit · `fig4` resources · `fig5` sensitivity · `fig6` frequency control · `fig7` monitor frontier · `fig8` SOTA · `fig9` monitor in-pipeline · `fig10` budget-matched SOTA · `fig11` trigger × base-learner · `fig12` external validity · `fig13` timing vs frequency · `fig14b` synthetic clustering · `fig15` closed-loop stability.
 
 **Full per-experiment analysis** (question · setup · numbers · figures · honest interpretation · caveats): [docs/experiments/](docs/experiments/).
 
 ## 9. Discussion
 
 - **The transferable idea is the policy, not the signal.** Reconstruction-error drift detection already exists; what this work adds is using it as a *when-to-adapt* trigger, the controls that separate timing from frequency and capacity, and the finding that trigger quality must be measured in the loop.
-- **Judge triggers by closed-loop stability.** Monitors indistinguishable on detection metrics differ starkly as triggers (0/5 vs 4/5 collapses). The failure mode is specific and operationally fatal for an IDS — a 0.49–0.66 false-positive rate — and it is caused by the trigger biasing the learner's training distribution. No paper in the unsupervised-drift literature we surveyed reports this.
+- **Judge triggers by closed-loop stability — and expect fragility.** Detection metrics say nothing about what a trigger does to the loop. Measured in the loop, every trigger we tested collapses the learner on 20–60% of runs into a regime that is operationally fatal for an IDS (0.49–0.69 false-positive rate), caused by the trigger biasing the learner's training distribution. No paper in the unsupervised-drift literature we surveyed reports this. We could *not* show our monitor is more stable than the published alternatives.
 - **Metric choice can hide failure.** Final-window F1 masked a mid-stream collapse that cumulative accuracy and FPR expose. Report a metric that can see the whole stream.
+- **Bimodal outcomes need many replicates.** At n=5 the stability comparison gave a clean, significant and wrong ranking, which we published to this repository and then had to retract at n=20. Collapse-count comparisons here are held to n ≥ 20.
 - **Base learner matters more than the augmenter.** Swapping the single tree for an ensemble at the same sparse budget gains ≈ +0.15 sustained F1 — far more than any augmentation strategy did. The practical recipe is ensemble + proactive triggered adaptation.
 - **Scope and limits.** The timing claim holds on CICIDS2017/2018; on UNSW-NB15 the benefit is frequency. Anticipation recall at the operating point is modest (~0.23). The shared schedule is derived from B's dynamics, which slightly favours B-like strategies (bounded by the label-derived schedule). Prequential evaluation assumes immediate labels — unrealistic in deployment, though all phases share the assumption, so comparisons stay internally valid. All three datasets are CICFlowMeter-family.
 - **Negative results are reported.** Generative augmentation under triggered adaptation (§4 note), and two pre-specified synthetic experiments that failed to establish a drift-structure mechanism. Both remain reproducible in this repository.

@@ -185,23 +185,29 @@ identical policy at a matched fire count. Two things came out:
 1. **The signal is not novel — and we say so.** Autoencoder reconstruction error
    for drift detection already exists. The contribution must be the *policy* plus
    the controlled evidence, never the detector.
-2. **The twist: monitors that detect equally do not *trigger* equally.** D3
-   collapsed 4/5 seeds, PCA and mean-shift 2/5, the autoencoder **0/5**. The
-   mechanism is verified: badly placed triggers feed the learner 43–47% attack
-   against a 20% base rate, its prior skews to ATTACK, the false-positive rate
-   hits 0.49–0.66, and the class-PHT runs away. `train atk%` tracks the collapse
+2. **The twist: the loop is fragile, for every trigger including ours.** Over
+   **20 seeds** the collapse counts are autoencoder 4/20, HDDDM 5/20, PCA 6/20,
+   D3 10/20, mean-shift 12/20 — only the trivial floor separates from ours
+   (p=0.023); pooled, ours vs all alternatives is p=0.119. The mechanism is
+   verified: badly placed triggers feed the learner up to 0.44 attack fraction
+   against a 0.20 base rate, its prior skews to ATTACK, the false-positive rate
+   hits 0.49–0.69, and the class-PHT runs away. `train atk%` tracks the collapse
    count monotonically across monitors.
 
-This **revises experiment 2** ("a cheap PCA monitor suffices"), which was read off
-*final F1* — a metric that masks mid-stream collapse (PCA seed 1: final F1 0.948,
-cumulative accuracy 0.444, FPR 0.657). Judged on closed-loop stability, the
-autoencoder earns its place after all.
+> **We got this wrong once, and the correction is instructive.** At 5 seeds the
+> same experiment read *autoencoder 0/5, D3 4/5, p=0.048*, and we concluded our
+> monitor was uniquely stable — and revised experiment 2 on that basis. Extending
+> to 20 seeds dissolved the ranking. The collapse is bimodal, and five replicates
+> cannot estimate a bimodal rate. Experiment 2's original conclusion therefore
+> **stands**: the autoencoder is over-engineered, cheap linear PCA nearly matches
+> it, and the deployable recipe leads with the cheap monitor.
 
-It also *sharpens* the thesis instead of threatening it: the claim was always that
-**where you place adaptation matters**, and this is the strongest evidence yet —
-bad placement does not merely fail to help, it destroys the model by biasing what
-it trains on. Trigger quality must be judged by its effect on the loop, not by
-detection metrics.
+What survives is not a leaderboard but something more useful: **an adaptation
+policy of this kind is fragile in a way its detection metrics never reveal**, the
+failure is a specific closed-loop mechanism we can point at, and final-window F1
+hides it entirely. That is the criterion the paper contributes — judge a trigger
+by what it does to the loop — even though applying that criterion did not crown
+our own monitor.
 
 ---
 
@@ -209,11 +215,16 @@ detection metrics.
 
 - ✅ An unsupervised covariate-shift trigger adapts earlier than a reactive
   error-based trigger and improves sustained F1 across learners and datasets.
-- ⚠️ "A cheap linear monitor is enough" — **revised** (experiment 7). True on
-  detection quality *when the loop stays stable*, but only the autoencoder keeps
-  it stable in 5/5 seeds; PCA and mean-shift collapse in 2/5 and the published D3
-  detector in 4/5, reaching false-positive rates of 0.49–0.66. Judge a trigger by
-  closed-loop stability, not by detection metrics.
+- ✅ "A cheap linear monitor is enough" — **stands.** It was briefly revised on a
+  5-seed stability result; at 20 seeds PCA matches the autoencoder on closed-loop
+  stability too (6/20 vs 4/20, p=0.72), so the original conclusion holds.
+- ✅ The adaptation loop is **fragile for every trigger tested** (20–60% of seeds
+  collapse into a 0.49–0.69 false-positive regime), the mechanism is verified,
+  and detection metrics do not predict it. Judge a trigger by closed-loop
+  stability.
+- ❌ "Our monitor is more stable than published unsupervised detectors" — **not
+  supported.** HDDDM and PCA are indistinguishable from it; D3 is worse in point
+  estimate but not significantly (p=0.096). Do not claim this.
 - ✅ Generative augmentation for triggered adaptation does **not** beat trivial
   controls — a controlled refutation, stated as a result.
 - ✅ In a controlled synthetic, informed timing beats a blind clock at matched

@@ -32,9 +32,12 @@ VALID_PHASES = (
     "ARF_freq", "SRP_freq",
     # Monitor ablations of C_early (Experiment #2): cheap shift monitors.
     "C_early_mean", "C_early_pca", "C_early_ks", "C_early_mmd",
-    # Published unsupervised drift detector as an external comparator for the
-    # monitor (D3, Gozuacik et al. CIKM 2019) at the identical protocol.
-    "C_early_d3",
+    # Published unsupervised drift detectors as external comparators for the
+    # monitor, at the identical protocol: D3 (Gozuacik et al. CIKM 2019) and
+    # HDDDM (Ditzler & Polikar, CIDUE 2011). "C_early_d3_native" additionally
+    # restores D3's own sliding window and AUC threshold, so the comparison no
+    # longer depends on our window bookkeeping.
+    "C_early_d3", "C_early_d3_native", "C_early_d3_sized", "C_early_hdddm",
 )
 
 
@@ -92,7 +95,9 @@ class ExperimentConfig:
     cgan_loss: str = "wgan_gp"  # "wgan_gp" | "bce" (ablation)
 
     # Early detection (C_early)
-    monitor_type: str = "ae"  # "ae" | "pca" | "ks" | "mmd" | "mean" (ablation, #2)
+    # "ae" | "pca" | "ks" | "mmd" | "mean" (ablation, #2)
+    # | "hdddm" | "d3" | "d3_native"      (published comparators, #7)
+    monitor_type: str = "ae"
     monitor_interval: int = 1_000  # recon-error sample cadence (finer -> more PHT updates)
     monitor_epochs: int = 5
     monitor_hidden: int = 32
@@ -103,6 +108,14 @@ class ExperimentConfig:
     recon_pht_min_instances: int = 10  # warmup checks before PHT_recon can fire
     lead_horizon: int = 20_000  # max samples between PHT_recon and PHT_class fires to pair them
     early_augment: bool = False  # if True, C_early also augments like C on early fires
+
+    # Native D3 comparator (monitor_type "d3_native"): the published algorithm's
+    # own hyperparameters, defaults as released by Gozuacik et al. (CIKM 2019).
+    # This monitor thresholds the AUC itself, so recon_pht_* does not apply.
+    d3_w: int = 100  # "old" window size
+    d3_rho: float = 0.1  # size of the "new" slice as a fraction of d3_w
+    d3_tau: float = 0.7  # AUC above which drift is declared
+    hdddm_bins: int | None = None  # histogram bins per feature (None -> sqrt(n))
 
     # Metrics / instrumentation
     rolling_f1_window: int = 5_000
@@ -189,6 +202,19 @@ def load_config(
 
     merged = _deep_merge(base_cfg, phase_cfg)
     merged = _deep_merge(merged, dataset_cfg)  # dataset overrides phase (per-dataset calibration)
+
+    # Some calibrated values are specific to a (dataset, phase) pair rather than
+    # to the dataset alone — the blind-clock interval of the *_freq controls is
+    # calibrated per learner so its fire count matches that learner's *_early
+    # arm. A flat dataset key cannot express that, so profiles may carry a
+    # `by_phase` block. Leaving these out silently de-matches the control and
+    # invalidates the comparison, which has happened once; keep them pinned in
+    # the profile rather than passed on the command line.
+    by_phase = merged.pop("by_phase", None) or {}
+    phase_name = phase_cfg.get("phase")
+    if phase_name and phase_name in by_phase:
+        merged = _deep_merge(merged, by_phase[phase_name])
+
     if overrides:
         merged = _deep_merge(merged, overrides)
     if dataset:

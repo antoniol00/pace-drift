@@ -15,25 +15,33 @@ answers both from the already-persisted artifacts plus one small set of new runs
 
 ## Part A — Statistical hardening (no new runs)
 
-Overall local F1 paired by seed (n=5) between the reactive arm (`B` / `*_sched`)
-and the proactive arm (`C_early` / `*_early`), with paired-t and bootstrap CIs,
-sign pattern, event stratification, and prequential Kappa from the traces.
-Script: `scripts/tier0_analysis.py`.
+Overall local F1 paired by seed (**n=10**) between the reactive arm
+(`B` / `*_sched`) and the proactive arm (`C_early` / `*_early`), with paired-t and
+bootstrap CIs, sign pattern, event stratification, and prequential Kappa from the
+traces. Script: `scripts/tier0_analysis.py`.
 
-- **Robust for the strong models.** 6/9 cells are ROBUST (all seeds same sign and
-  the paired-t CI excludes 0). The 3 non-robust cells are exactly the **HAT**
-  cells (high seed variance); **all six ensemble cells (ARF, SRP × 3 datasets)
-  are robust** with tight CIs. Aggregate over the 9 cells: mean Δ **+0.033**, 95%
-  CI **[+0.015, +0.051]**, 9/9 positive.
+> Originally run at n=5; extended to 10 seeds per cell on 2026-07-28. The effect
+> got **stronger**, not weaker — the opposite of what happened to the stability
+> comparison in [experiment 7](07-unsupervised-comparator.md), which is why both
+> were worth re-running.
+
+- **Robust for the strong models.** **7/9 cells have a paired-t CI excluding 0**
+  (5 ROBUST — every seed agrees in sign as well — plus 2 CI-signif where a single
+  seed dissents). The 2 remaining WEAK cells are **HAT** ones (high seed
+  variance); every ensemble cell has a CI excluding 0, five of the six with
+  10/10 seeds agreeing at Wilcoxon p=0.002. Aggregate over the 9 cells: mean Δ
+  **+0.043**, 95% CI **[+0.021, +0.065]**, 9/9 positive (sign test p=0.0039).
+  *(At n=5 this read 6/9 ROBUST and +0.033 [+0.015, +0.051].)*
 - **Confirmed in imbalance-aware metrics.** Prequential Kappa-M and
   Kappa-Temporal (from per-sample traces) are positive in all 9 cells. On the
-  degenerate reactive HAT/2017, Kappa-Temporal is −3.7 (worse than a persistence
-  classifier); the proactive arm rescues it (Kappa-M 0.32→0.95).
+  degenerate reactive HAT/2017, Kappa-Temporal is −1.93 (worse than a persistence
+  classifier); the proactive arm improves it to −1.23 and lifts Kappa-M
+  0.58→0.68.
 - **Mechanism check (event stratification).** Splitting real (class-fire) drifts
   into anticipated vs reactive-only: anticipated drifts recover with lower AUD on
-  2017 (HAT p=0.011, SRP p<0.001) and on UNSW/ARF (p=0.004), but **not on 2018**
-  (p≈0.84–0.98) — the first hint that the 2018 gain is not anticipation. Monitor
-  false-alarm rate is high (54–80%).
+  2017 (HAT p=0.037, ARF p=0.013, SRP p<0.001) and on UNSW (ARF p<0.001, SRP
+  p=0.016), but **not on 2018** (p≈0.94–0.99) — the first hint that the 2018 gain
+  is not anticipation. Monitor false-alarm rate is high (30–80%).
 
 ## Part B — The decisive frequency-matched control (new runs)
 
@@ -51,12 +59,29 @@ early − sched (reported) = (freq − sched) frequency  +  (early − freq) tim
 The clean, airtight statement is the **timing** component `early − freq` (same
 fire count, informed vs blind placement). Script: `scripts/tier1_analysis.py`.
 
+10 seeds per cell:
+
 | dataset | learner | fires sched/freq/early | F1 sched/freq/early | Δ timing (early−freq) | verdict |
 |---|---|---|---|---|:---:|
-| CIC-IDS2018 | ARF | 124 / 254 / 255 | 0.913 / 0.888 / 0.926 | **+0.038** [+0.038, +0.039] | **timing** |
-| CIC-IDS2018 | SRP | 124 / 256 / 256 | 0.925 / 0.881 / 0.929 | **+0.048** [+0.046, +0.049] | **timing** |
-| UNSW-NB15 | ARF | 117 / 172 / 173 | 0.597 / 0.655 / 0.658 | +0.002 [−0.009, +0.014] | ~freq |
-| UNSW-NB15 | SRP | 117 / 167 / 167 | 0.695 / 0.743 / 0.746 | +0.002 [−0.005, +0.009] | ~freq |
+| CIC-IDS2018 | ARF | 124 / 254 / 253 | 0.913 / 0.888 / 0.926 | **+0.038** [+0.037, +0.038] | **timing** |
+| CIC-IDS2018 | SRP | 124 / 256 / 254 | 0.924 / 0.881 / 0.929 | **+0.047** [+0.047, +0.048] | **timing** |
+| UNSW-NB15 | ARF | 117 / 172 / 171 | 0.603 / 0.652 / 0.662 | +0.010 [+0.001, +0.019] | ~freq |
+| UNSW-NB15 | SRP | 117 / 167 / 167 | 0.697 / 0.746 / 0.745 | −0.001 [−0.008, +0.006] | ~freq |
+
+On UNSW the timing component stays an order of magnitude below CIC-IDS2018's: on
+ARF it is a small residual (+0.010, ~17% of that cell's +0.059 total) whose CI
+only just clears 0, and on SRP it is indistinguishable from 0. The
+frequency-dominated reading of UNSW therefore stands.
+
+> **Calibration caveat, recorded because it nearly went wrong.** The blind clock
+> must fire as often as `*_early` *on that dataset*: 9549/9857 on UNSW versus
+> 11587/11505 on 2017-2018. When seeds 5-9 were first run these values lived only
+> in a CLI flag from an earlier session, so they silently fell back to the
+> 2017-2018 interval and fired 142 times instead of 172. That inflated the UNSW
+> timing component to +0.015 [+0.004, +0.026] on ARF and made SRP look
+> significant (+0.007 [+0.001, +0.014]) — i.e. it would have reversed this
+> section's conclusion. Those seeds were discarded and re-run; the intervals are
+> now pinned in `configs/datasets/*.yaml` under `by_phase:` and covered by a test.
 
 ![Timing vs frequency at matched adaptation count](../figures/fig13_timing_vs_frequency.png)
 

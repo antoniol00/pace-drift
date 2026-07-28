@@ -24,3 +24,15 @@ n_pretrain: 50000
 # Pinned so ARF_early / SRP_early use the same calibrated monitor on this dataset.
 recon_pht_threshold: 0.1
 recon_pht_delta: 0.0005
+# Blind-clock cadence for the frequency-matched controls (Tier 1). Calibrated per
+# learner so each *_freq arm fires as often as the matching *_early arm on THIS
+# dataset: 9549 -> 172 fires vs ARF_early's 173; 9857 -> 167 vs SRP_early's 167.
+# The phase defaults (11587 / 11505) are the 2017/2018 calibration and give only
+# ~142 fires here, which silently de-matches the control — this is exactly how a
+# batch of seeds was invalidated on 2026-07-28. Pinned so the flag is never
+# needed on the command line.
+by_phase:
+  ARF_freq:
+    periodic_adapt_interval: 9549
+  SRP_freq:
+    periodic_adapt_interval: 9857

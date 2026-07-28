@@ -143,7 +143,38 @@ def _make_monitor(config: ExperimentConfig, seed: int) -> ReconstructionMonitor 
     common = dict(check_interval=config.monitor_interval, clip=config.monitor_clip, seed=seed)
     if kind == "pca":
         return MONITOR_TYPES["pca"](latent=config.monitor_latent, **common)
+    if kind == "hdddm":
+        return MONITOR_TYPES["hdddm"](bins=config.hdddm_bins, **common)
+    if kind == "d3_native":
+        # D3's own window drives the cadence, so check_interval does not apply.
+        return MONITOR_TYPES["d3_native"](
+            w=config.d3_w, rho=config.d3_rho, tau=config.d3_tau,
+            clip=config.monitor_clip, seed=seed,
+        )
     return MONITOR_TYPES[kind](**common)
+
+
+def _recon_fired(
+    dual: DualPHT,
+    monitor: ReconstructionMonitor | ShiftMonitor,
+    index: int,
+    score: float,
+) -> bool:
+    """Turn a monitor observation into a recon fire.
+
+    Most monitors emit a continuous shift statistic and the recon Page-Hinkley
+    decides when that statistic has drifted. A *self-declaring* monitor carries
+    the published method's own decision rule (see
+    :class:`~driftgan.early.shift_monitors.D3NativeMonitor`), so its verdict is
+    taken as-is and only the fire bookkeeping — which the lead-time analysis
+    reads — is shared.
+    """
+    if isinstance(monitor, ShiftMonitor) and monitor.declares_drift:
+        if not monitor.fired:
+            return False
+        dual.recon_fires.append(index)
+        return True
+    return dual.update_recon(index, score)
 
 
 def run_phase(
@@ -305,7 +336,9 @@ def run_phase(
                 if monitor is not None:
                     with tracker.section("monitor"):
                         recon_err = monitor.observe(x, n_processed)
-                    if recon_err is not None and dual.update_recon(n_processed, recon_err):
+                    if recon_err is not None and _recon_fired(
+                        dual, monitor, n_processed, recon_err
+                    ):
                         fired = True
                         fire_source = "recon" if fire_source == "" else "recon+class"
 

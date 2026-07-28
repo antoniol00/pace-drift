@@ -74,6 +74,43 @@ def test_load_config_dataset_layer_overrides_phase(tmp_path, monkeypatch):
     assert c.recon_pht_threshold == 0.05  # dataset layer overrides the phase default
 
 
+def test_dataset_by_phase_block_overrides_phase_config(tmp_path, monkeypatch):
+    """A (dataset, phase)-specific calibrated value must beat the phase default.
+
+    The blind-clock interval of the `*_freq` controls is calibrated per learner
+    *and* per dataset so the control stays fire-count matched. It used to live
+    only in a CLI flag, and omitting it silently de-matched the control and
+    invalidated a batch of runs; the value now lives in the dataset profile and
+    this pins that it wins over the phase config.
+    """
+    configs = tmp_path / "configs"
+    (configs / "datasets").mkdir(parents=True)
+    (configs / "base.yaml").write_text("periodic_adapt_interval: 12000\nstart_row: 0\n")
+    (configs / "datasets" / "ds.yaml").write_text(
+        "dataset: ds\ncsv_path: /x.csv\ntarget_col: Label\nbenign_label: Benign\n"
+        "by_phase:\n"
+        "  ARF_freq:\n    periodic_adapt_interval: 9549\n"
+        "  SRP_freq:\n    periodic_adapt_interval: 9857\n"
+    )
+    arf = configs / "phase_arf_freq.yaml"
+    arf.write_text("phase: ARF_freq\nperiodic_adapt_interval: 11587\n")
+    srp = configs / "phase_srp_freq.yaml"
+    srp.write_text("phase: SRP_freq\nperiodic_adapt_interval: 11505\n")
+    monkeypatch.setattr(cfg_mod, "CONFIGS_DIR", configs)
+
+    assert load_config(arf, dataset="ds").periodic_adapt_interval == 9549
+    assert load_config(srp, dataset="ds").periodic_adapt_interval == 9857
+    # No dataset layer -> the phase default stands, and `by_phase` never leaks
+    # into the config object.
+    plain = load_config(arf)
+    assert plain.periodic_adapt_interval == 11587
+    assert "by_phase" not in plain.extra
+    # An explicit CLI override still wins over the pinned value.
+    assert load_config(
+        arf, overrides={"periodic_adapt_interval": 7}, dataset="ds"
+    ).periodic_adapt_interval == 7
+
+
 def test_save_recovery_flat_for_default(tmp_path):
     p = save_recovery([], "B", 0, tmp_path)
     assert p.name == "B_0.parquet"

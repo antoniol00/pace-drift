@@ -31,7 +31,8 @@ CICFlowMeter family (2018, UNSW) showed gradual/bursty natural drift matching
 the existing methodology, so those two were run instead.
 
 **Minimal 2×2, per dataset.** The same six phases as experiment 3c — **B,
-C_early** (HAT) and **ARF_sched/ARF_early, SRP_sched/SRP_early** — × 5 seeds.
+C_early** (HAT) and **ARF_sched/ARF_early, SRP_sched/SRP_early** — × 10 seeds
+(originally 5; extended on 2026-07-28, see [experiment 6](06-timing-vs-frequency.md)).
 The null GAN-augmentation phases (C, C_cond, C') and the monitor ablations are
 **not** rerun; those results are already established on 2017 and are
 off-message for a generalization check.
@@ -63,7 +64,7 @@ threshold was pinned as-is (`configs/datasets/cicids2018.yaml`,
 
 ## Results
 
-Overall local F1 (mean over valid rolling windows, 5 seeds) and mean
+Overall local F1 (mean over valid rolling windows, 10 seeds) and mean
 adaptation count, reactive (`B`/`*_sched`) vs proactive (`C_early`/`*_early`):
 
 | Dataset | Base learner | reactive F1 | proactive F1 | Δ | adaptations (reactive → proactive) |

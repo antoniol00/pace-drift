@@ -12,10 +12,18 @@ shift statistic:
 - ``KSMonitor``                 mean per-feature Kolmogorov–Smirnov distance
 - ``MMDMonitor``               RBF maximum mean discrepancy (kernel two-sample)
 - ``MeanShiftMonitor``         L2 shift of the standardized feature mean (floor)
+- ``HDDDMMonitor``             mean per-feature Hellinger distance (published)
+- ``D3Monitor``                discriminative old-vs-new AUC (published)
+- ``D3NativeMonitor``          D3 with its own window roll and decision rule
 
 Each exposes the same interface as the AE monitor — ``observe(x, index) ->
 float | None`` and an ``error_history`` list of ``(index, score)`` — so they
 drop into the runner and the offline lead-time analysis unchanged.
+
+Most monitors emit a continuous statistic and let the runner's recon
+Page-Hinkley decide when to fire. A monitor that carries its own published
+decision rule instead sets ``declares_drift = True`` and reports its verdict in
+``fired``; see :class:`D3NativeMonitor`.
 """
 
 from __future__ import annotations
@@ -36,6 +44,12 @@ class ShiftMonitor:
     (distance of the current buffer to the reference) and
     :meth:`_update_reference` (track the new normal, called *after* scoring).
     """
+
+    #: When True the monitor decides drift itself (its published rule) and the
+    #: runner reads :attr:`fired` instead of thresholding the score with the
+    #: recon Page-Hinkley.
+    declares_drift = False
+    fired = False
 
     def __init__(
         self,
@@ -210,6 +224,66 @@ class MeanShiftMonitor(ShiftMonitor):
         self._ref_mean = Xn.mean(0)
 
 
+class HDDDMMonitor(ShiftMonitor):
+    """Hellinger distance between per-feature histograms — HDDDM.
+
+    Ditzler & Polikar, *Hellinger distance based drift detection for
+    nonstationary environments*, IEEE CIDUE 2011. The second published
+    unsupervised detector we compare against, and a useful contrast to
+    :class:`D3Monitor`: it compares *distributions* bin by bin rather than
+    asking whether a linear boundary separates them, so unlike a discriminative
+    statistic it responds to a change in dispersion at a constant mean.
+
+    The statistic is the mean over features of
+
+        H_j = sqrt( sum_k ( sqrt(P_jk) - sqrt(Q_jk) )^2 )
+
+    over ``bins`` equal-width bins spanning the union of both samples, with P
+    and Q the normalized histograms of the reference and current buffers. As in
+    the reference method the bin count defaults to ``sqrt(n)``. Thresholding is
+    left to the runner's recon Page-Hinkley, exactly as for every other
+    continuous monitor here, so the arms differ only in the statistic.
+    """
+
+    def __init__(self, bins: int | None = None, **kw):
+        super().__init__(**kw)
+        self.bins = bins
+        self._ref: np.ndarray | None = None
+
+    def _init_reference(self, Xn: np.ndarray) -> None:
+        self._ref = Xn
+
+    def _update_reference(self, Xn: np.ndarray) -> None:
+        self._ref = Xn
+
+    def _score(self, Xn: np.ndarray) -> float:
+        assert self._ref is not None
+        ref = self._ref
+        n_bins = self.bins or max(2, int(np.sqrt(min(len(ref), len(Xn)))))
+        total = 0.0
+        for j in range(Xn.shape[1]):
+            a, b = ref[:, j], Xn[:, j]
+            lo = float(min(a.min(), b.min()))
+            hi = float(max(a.max(), b.max()))
+            if not (np.isfinite(lo) and np.isfinite(hi)):
+                continue
+            # Bin edges are built in float64 and checked for collisions rather
+            # than delegated to np.histogram's `range=`, which derives them in
+            # the *input* dtype: on float32 flow features a near-constant column
+            # (always-zero flags and the like, of which there are many) produces
+            # duplicate edges and np.histogram raises. Such a feature carries no
+            # distributional information, so it contributes zero divergence.
+            edges = np.linspace(lo, hi, n_bins + 1, dtype=np.float64)
+            if np.any(edges[:-1] >= edges[1:]):
+                continue
+            p, _ = np.histogram(a, bins=edges)
+            q, _ = np.histogram(b, bins=edges)
+            p = p / p.sum()
+            q = q / q.sum()
+            total += float(np.sqrt(((np.sqrt(p) - np.sqrt(q)) ** 2).sum()))
+        return total / Xn.shape[1]
+
+
 class D3Monitor(ShiftMonitor):
     """Discriminative drift statistic — D3 (Gozuacik et al., CIKM 2019).
 
@@ -275,11 +349,15 @@ class D3Monitor(ShiftMonitor):
         ranks[order] = ranks_sorted
         return float((ranks[y == 1].sum() - n_pos * (n_pos + 1) / 2.0) / (n_pos * n_neg))
 
-    def _score(self, Xn: np.ndarray) -> float:
-        """AUC of separating the reference window (0) from the current one (1)."""
-        assert self._ref is not None
-        X = np.vstack([self._ref, Xn])
-        y = np.concatenate([np.zeros(len(self._ref)), np.ones(len(Xn))])
+    def _auc_two_sample(self, old: np.ndarray, new: np.ndarray) -> float:
+        """Cross-validated AUC of separating ``old`` (label 0) from ``new`` (1).
+
+        This is D3's statistic proper; both the shared-protocol monitor and the
+        native-window one call it so that only the *window bookkeeping* differs
+        between them.
+        """
+        X = np.vstack([old, new])
+        y = np.concatenate([np.zeros(len(old)), np.ones(len(new))])
         # 2-fold stratified CV, as in the reference implementation
         preds = np.zeros(len(y))
         folds = np.zeros(len(y), dtype=int)
@@ -294,11 +372,80 @@ class D3Monitor(ShiftMonitor):
             preds[te] = self._logreg_scores(X[tr], y[tr], X[te])
         return self._auc(y, preds)
 
+    def _score(self, Xn: np.ndarray) -> float:
+        """AUC of separating the reference window (0) from the current one (1)."""
+        assert self._ref is not None
+        return self._auc_two_sample(self._ref, Xn)
+
+
+class D3NativeMonitor(D3Monitor):
+    """D3 with its published window mechanics *and* its own decision rule.
+
+    :class:`D3Monitor` runs D3's statistic inside this module's shared protocol,
+    which makes it directly comparable with the other monitors but leaves a
+    reviewer two openings: the window bookkeeping is ours rather than D3's, and
+    the fire decision is delegated to our recon Page-Hinkley. This class closes
+    both. It keeps D3's own window ``W`` of size ``w(1 + rho)``, tests it every
+    ``w * rho`` samples by separating the old slice ``W[:w]`` from the new one
+    ``W[w:]``, and declares drift itself when the AUC exceeds ``tau`` — after
+    which the old slice is discarded, exactly as in the reference algorithm
+    (Gozuacik et al., CIKM 2019; defaults ``w=100, rho=0.1, tau=0.7``). When no
+    drift is declared the window simply slides by ``w * rho``.
+
+    Two deviations remain, both numerical rather than algorithmic: logistic
+    regression is fit by gradient descent (the project has no scikit-learn
+    dependency) and features pass through the frozen per-feature standardizer
+    shared by every monitor in this module, which that solver needs in order to
+    converge. Standardization is a fixed affine map, so it does not change what
+    is separable — only the conditioning of the fit.
+    """
+
+    declares_drift = True
+
+    def __init__(self, w: int = 100, rho: float = 0.1, tau: float = 0.7, **kw):
+        super().__init__(**kw)
+        self.w = w
+        self.rho = rho
+        self.tau = tau
+        self.fired = False
+        self._new = max(1, int(round(w * rho)))
+        # maxlen gives D3's non-drift roll for free: every append past a full
+        # window evicts the oldest sample, so by the next test the window has
+        # slid by exactly `_new`.
+        self._window: deque[np.ndarray] = deque(maxlen=w + self._new)
+        self._since_test = 0
+
+    def observe(self, x: dict[str, float], index: int) -> float | None:
+        if self._keys is None:
+            self._keys = list(x.keys())
+        self._window.append(np.array([x.get(k, 0.0) for k in self._keys], dtype=np.float32))
+        self.fired = False
+        if len(self._window) < self.w + self._new:
+            return None  # window not full yet: D3 cannot test
+        self._since_test += 1
+        if self._since_test < self._new:
+            return None
+        self._since_test = 0
+
+        X = np.stack(self._window)
+        if self._scaler is None:
+            self._scaler = FeatureScaler.fit(X)
+        Xn = self._std(X)
+        score = self._auc_two_sample(Xn[: self.w], Xn[self.w :])
+        self.error_history.append((index, score))
+        if score > self.tau:
+            self.fired = True
+            for _ in range(self.w):  # drift: drop the old slice, keep the new
+                self._window.popleft()
+        return score
+
 
 MONITOR_TYPES = {
     "pca": PCAReconstructionMonitor,
     "ks": KSMonitor,
     "mmd": MMDMonitor,
     "mean": MeanShiftMonitor,
+    "hdddm": HDDDMMonitor,
     "d3": D3Monitor,
+    "d3_native": D3NativeMonitor,
 }

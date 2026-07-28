@@ -331,46 +331,55 @@ def _run_dir(dataset: str, phase: str, seed: int) -> Path:
     return base / phase / f"seed_{seed}"
 
 
-def _overall_local_f1(dataset: str, phase: str) -> float | None:
-    """Mean valid-window F1 pooled across SEEDS for (dataset, phase).
+def _cell_seeds(dataset: str, phase: str) -> list[int]:
+    """Completed seeds for (dataset, phase).
 
-    Same metric as ``_local_f1_by_segment``'s ``overall``. Returns None if any
-    seed's snapshots.parquet is missing (run not yet present -> cell skipped).
+    The cross-dataset figures must agree with `tier0_analysis` /
+    `tier1_analysis`, which resolve seeds per cell rather than assuming one
+    global count — cells were extended past the original five at different
+    times. The anchor-narrative figures keep using ``SEEDS``, since every arm
+    in those has exactly the original five.
+    """
+    d = _run_dir(dataset, phase, 0).parent
+    return sorted(
+        int(p.name.split("_")[1])
+        for p in d.glob("seed_*")
+        if (p / "snapshots.parquet").exists() and (p / "summary.json").exists()
+    )
+
+
+def _overall_local_f1(dataset: str, phase: str,
+                      seeds: list[int] | None = None) -> float | None:
+    """Mean valid-window F1 pooled over ``seeds`` (default: the cell's own).
+
+    Same metric as ``_local_f1_by_segment``'s ``overall``. Returns None if there
+    is nothing to summarise (run not yet present -> cell skipped).
     """
     rows = []
-    for s in SEEDS:
-        f = _run_dir(dataset, phase, s) / "snapshots.parquet"
-        if not f.exists():
-            return None
-        df = pd.read_parquet(f)
+    for s in _cell_seeds(dataset, phase) if seeds is None else seeds:
+        df = pd.read_parquet(_run_dir(dataset, phase, s) / "snapshots.parquet")
         rows.append(df[df["valid"]][["f1"]])
-    return float(pd.concat(rows)["f1"].mean())
+    return float(pd.concat(rows)["f1"].mean()) if rows else None
 
 
-def _per_seed_local_f1(dataset: str, phase: str) -> np.ndarray | None:
+def _per_seed_local_f1(dataset: str, phase: str,
+                       seeds: list[int] | None = None) -> np.ndarray | None:
     """Overall local F1 per seed (not pooled) for (dataset, phase), or None."""
     out = []
-    for s in SEEDS:
-        f = _run_dir(dataset, phase, s) / "snapshots.parquet"
-        if not f.exists():
-            return None
-        df = pd.read_parquet(f)
+    for s in _cell_seeds(dataset, phase) if seeds is None else seeds:
+        df = pd.read_parquet(_run_dir(dataset, phase, s) / "snapshots.parquet")
         out.append(float(df.loc[df["valid"], "f1"].mean()))
-    return np.array(out)
+    return np.array(out) if out else None
 
 
-def _mean_n_drifts(dataset: str, phase: str) -> float | None:
-    """Mean adaptation count (n_drifts) across SEEDS for (dataset, phase).
-
-    Returns None if any seed's summary.json is missing.
-    """
-    vals = []
-    for s in SEEDS:
-        f = _run_dir(dataset, phase, s) / "summary.json"
-        if not f.exists():
-            return None
-        vals.append(json.loads(f.read_text())["n_drifts"])
-    return float(np.mean(vals))
+def _mean_n_drifts(dataset: str, phase: str,
+                   seeds: list[int] | None = None) -> float | None:
+    """Mean adaptation count (n_drifts) over ``seeds`` (default: the cell's own)."""
+    vals = [
+        json.loads((_run_dir(dataset, phase, s) / "summary.json").read_text())["n_drifts"]
+        for s in (_cell_seeds(dataset, phase) if seeds is None else seeds)
+    ]
+    return float(np.mean(vals)) if vals else None
 
 
 def fig6_frequency_ablation() -> None:
@@ -636,18 +645,29 @@ def fig12_external_validity() -> None:
 
     Replicates fig11's base-learner x trigger 2x2 (reactive `*_sched`/B vs
     proactive `*_early`) per dataset (CICIDS2017 anchor, CICIDS2018, UNSW-NB15).
-    Cells whose runs are not (yet) complete across all 5 seeds are skipped —
-    the bar / delta annotation is simply not drawn.
+    Cells with no completed runs are skipped — the bar / delta annotation is
+    simply not drawn.
+
+    Each cell is restricted to the seeds its *two* arms share, matching how
+    `tier0_analysis` pairs them. Without that, an arm that was extended further
+    than its partner (C_early runs to 20 seeds for the comparator experiment)
+    would be summarised over a different, larger sample than the arm it is
+    plotted against, and the bars would not correspond to the reported deltas.
     """
     datasets = ["cicids2017", "cicids2018", "unsw"]
     dset_label = {"cicids2017": "CIC-IDS2017", "cicids2018": "CIC-IDS2018",
                   "unsw": "UNSW-NB15"}
     learners = [("HAT", "B", "C_early"), ("ARF", "ARF_sched", "ARF_early"),
                 ("SRP", "SRP_sched", "SRP_early")]
-    phases = sorted({p for _, r, e in learners for p in (r, e)})
 
-    f1_ov = {(ds, p): _overall_local_f1(ds, p) for ds in datasets for p in phases}
-    n_drifts = {(ds, p): _mean_n_drifts(ds, p) for ds in datasets for p in phases}
+    f1_ov: dict[tuple[str, str], float | None] = {}
+    n_drifts: dict[tuple[str, str], float | None] = {}
+    for ds in datasets:
+        for _base, r, e in learners:
+            shared = sorted(set(_cell_seeds(ds, r)) & set(_cell_seeds(ds, e)))
+            for p in (r, e):
+                f1_ov[(ds, p)] = _overall_local_f1(ds, p, shared)
+                n_drifts[(ds, p)] = _mean_n_drifts(ds, p, shared)
     if not any(v is not None for v in f1_ov.values()):
         print("  (fig12 skipped — no cross-dataset runs present yet)")
         return
@@ -717,7 +737,7 @@ def fig12_external_validity() -> None:
     print(header)
     print("-" * len(header))
     for ds in datasets:
-        for phase in phases:
+        for phase in sorted({p for _, r, e in learners for p in (r, e)}):
             f1, nd = f1_ov[(ds, phase)], n_drifts[(ds, phase)]
             if f1 is None and nd is None:
                 continue
@@ -800,6 +820,91 @@ def fig13_timing_vs_frequency() -> None:
     print("  wrote fig13_timing_vs_frequency.png")
 
 
+def fig15_closed_loop_stability() -> None:
+    """Per-seed cumulative accuracy by monitor — the closed-loop stability view.
+
+    The comparator result is about *dispersion*, not central tendency: the arms
+    are bimodal, so a bar of means hides exactly what matters. Every seed is
+    therefore drawn as its own point, with the collapse band shaded. Two
+    monitors with indistinguishable detection metrics land in visibly different
+    places here, which is the argument the figure has to carry.
+    """
+    # Budget-matched arms first, then the two native-D3 arms, which answer a
+    # different question and must not be read as part of the matched comparison.
+    matched = [
+        ("C_early", "autoencoder\n(ours)", "#009E73"),
+        ("C_early_hdddm", "HDDDM\n(CIDUE'11)", "#0072B2"),
+        ("C_early_pca", "PCA\nlinear", "#56B4E9"),
+        ("C_early_mean", "mean-shift\n(floor)", "#CC79A7"),
+        ("C_early_d3", "D3\n(CIKM'19)", "#E69F00"),
+    ]
+    native = [
+        ("C_early_d3_sized", "D3 native\n(sized)", "#D55E00"),
+        ("C_early_d3_native", "D3 native\n(defaults)", "#999999"),
+    ]
+
+    def collect(group):
+        out = []
+        for phase, label, color in group:
+            accs = np.array([
+                json.load(open(f))["final_acc"]
+                for f in glob.glob(str(RUNS / phase / "seed_*" / "summary.json"))
+            ])
+            if accs.size:
+                out.append((label, accs, color))
+        # Within each group, order by collapse count so the figure reads left to
+        # right from most to least stable without the caption having to say so.
+        return sorted(out, key=lambda r: (r[1] < 0.90).sum())
+
+    xs, labels, series = [], [], []
+    for i, (label, accs, color) in enumerate(collect(matched) + collect(native)):
+        xs.append(i)
+        labels.append(f"{label}\nn={len(accs)}")
+        series.append((i, accs, color))
+
+    if not series:
+        print("  (no comparator runs; skipping fig15)")
+        return
+
+    fig, ax = plt.subplots(figsize=(9, 4.6))
+    ax.axhspan(0.0, 0.90, color="#d62728", alpha=0.06, zorder=0)
+    ax.axhline(0.90, color="#d62728", lw=1.0, ls="--", zorder=1)
+    ax.axhline(0.80, color="#999999", lw=1.0, ls=":", zorder=1)
+    # Anchored left: the right-hand arms have points sitting on both guide lines.
+    ax.text(-0.42, 0.893, "collapse (< 0.90)", color="#d62728",
+            fontsize=9, ha="left", va="top")
+    ax.text(-0.42, 0.793, "majority class ≈ 0.80", color="#666666",
+            fontsize=9, ha="left", va="top")
+
+    rng = np.random.default_rng(0)
+    for i, accs, color in series:
+        jitter = rng.uniform(-0.16, 0.16, size=len(accs))
+        ax.scatter(i + jitter, accs, s=34, color=color, alpha=0.85,
+                   edgecolor="white", linewidth=0.6, zorder=3)
+        ax.plot([i - 0.28, i + 0.28], [np.median(accs)] * 2,
+                color=color, lw=2.4, zorder=4)
+        n_bad = int((accs < 0.90).sum())
+        ax.annotate(f"{n_bad}/{len(accs)}", (i, 1.017), ha="center",
+                    fontsize=9, fontweight="bold",
+                    color="#d62728" if n_bad > len(accs) // 4 else "#333333")
+
+    ax.set_xticks(xs)
+    ax.set_xticklabels(labels, fontsize=9)
+    ax.set_ylabel("cumulative accuracy (per seed)")
+    ax.set_ylim(0.35, 1.05)
+    ax.set_title("Closed-loop stability: identical policy, only the trigger differs",
+                 loc="left")
+    fig.text(0.5, -0.06,
+             "Bars mark medians; the count above each arm is collapsed seeds. The "
+             "first five arms fire equally often by calibration,\nso their spread "
+             "reflects *where* adaptation lands; the two native-D3 arms use D3's "
+             "own decision rule and are not budget-matched.",
+             ha="center", fontsize=8.5, color="#444444")
+    fig.savefig(OUT / "fig15_closed_loop_stability.png")
+    plt.close(fig)
+    print("  wrote fig15_closed_loop_stability.png")
+
+
 def main() -> None:
     summ = load_summaries()
     fig1_trajectory()
@@ -812,6 +917,7 @@ def main() -> None:
     fig11_early_ensemble()
     fig12_external_validity()
     fig13_timing_vs_frequency()
+    fig15_closed_loop_stability()
     print("wrote:")
     for p in sorted(OUT.glob("*.png")):
         print(" ", p)
