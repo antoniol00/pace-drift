@@ -18,4 +18,3 @@ d3_rho: 0.1
 d3_tau: 0.7
 monitor_clip: 10.0
 lead_horizon: 20000
-early_augment: false

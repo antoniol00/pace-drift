@@ -62,14 +62,14 @@ the **unlabelled input distribution**, which is exactly what our monitor does.
 > therefore **not** a novel detector, and the paper must not claim it is. The
 > contribution has to sit on the *policy*, not the signal.
 >
-> **And we do not rescue it by claiming ours is more stable either.** An earlier
-> 5-seed result suggested exactly that; at 20 seeds it did not hold (experiment
-> 7). What the comparator experiment does establish is different and, we think,
-> more useful: *this style of adaptation loop is **fragile** — at matched fire
-> count every trigger we tested, ours included, intermittently drives it into a
-> catastrophic false-positive regime, through a mechanism we verify. That
-> fragility is not reported by any of these papers, and it is invisible to the
-> detection metrics they do report.*
+> **Nor do we rescue it by claiming ours is more stable.** It is not: at matched
+> fire count over 20 seeds our monitor is statistically indistinguishable from
+> HDDDM and from a cheap PCA statistic (experiment 7). What the comparator
+> experiment establishes is different and, we think, more useful: *this style of
+> adaptation loop is **fragile** — every trigger we tested, ours included,
+> intermittently drives it into a catastrophic false-positive regime, through a
+> mechanism we verify. That fragility is not reported by any of these papers, and
+> it is invisible to the detection metrics they do report.*
 
 ---
 
@@ -133,8 +133,8 @@ controls are rare. That methodological gap, not a new detector, is our opening.
    literature.
 
 In one line: **the novelty is the policy and the controlled evidence, not the
-signal.** Framed that way the related work supports us; framed as "a new
-generative drift detector" it destroys us.
+signal.** Framed that way the related work supports us; framed as "a new drift
+detector" it does not survive §2.
 
 ---
 
@@ -171,10 +171,8 @@ autoencoder **4/20**, HDDDM **5/20** (Fisher p = 1.00), PCA **6/20** (p = 0.72),
 D3 **10/20** (p = 0.096), mean-shift **12/20** (p = 0.023). Pooled, ours against
 all four alternatives is 4/20 vs 33/80, p = 0.119.
 
-Read that carefully, because an earlier 5-seed version of this experiment
-reported AE 0/5 vs D3 4/5 (p = 0.048) and we drew the wrong conclusion from it.
-**Our monitor is not measurably more stable than the published detectors.** What
-the experiment does establish:
+**Our monitor is not measurably more stable than the published detectors**, and
+that is stated rather than buried. What the experiment does establish:
 
 1. **The loop is fragile, and that is the reportable finding.** Every trigger —
    two published detectors, two cheap statistics and our own — collapses the
@@ -211,10 +209,10 @@ budget-matched by construction. This is evidence about what these signals do to
 Treat the collapse counts as effect sizes on a modest number of runs: the
 ordering is the result, the individual pairwise p-values at n = 20 are not.
 
-**Methodological note we owe the reader.** A bimodal outcome needs far more
-replicates than a mean does. At n = 5 this experiment produced a clean,
-significant and *wrong* ranking, which we published to the repository and then
-had to retract. We now hold collapse-count comparisons to n ≥ 20.
+**Methodological note.** The collapse outcome is bimodal — a run either stays
+healthy or falls into a degenerate regime, with almost nothing in between — so a
+handful of replicates estimates its rate badly and can produce a clean-looking
+but spurious ranking. Collapse-count comparisons here are held to n ≥ 20.
 
 ---
 

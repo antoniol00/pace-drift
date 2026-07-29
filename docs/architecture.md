@@ -7,20 +7,18 @@ phase runs through one prequential engine** and differs only in a few pluggable
 components, so any difference in results is attributable to those components and
 nothing else. Protocol-level detail (schedule construction,
 recovery-metric semantics, statistics) lives in [methodology.md](methodology.md);
-GAN internals in [gan_design.md](gan_design.md); the per-experiment results in
-[experiments/](experiments/).
+the per-experiment results in [experiments/](experiments/).
 
-## 1. One engine, four pluggable slots
+## 1. One engine, three pluggable slots
 
 `src/driftgan/experiments/runner.py:run_phase` is a single test-then-train
-(prequential) loop over the CICIDS2017 stream. A phase is a choice of four slots:
+(prequential) loop over the stream. A phase is a choice of three slots:
 
 | Slot | Options | Where |
 |---|---|---|
 | **Model** | Hoeffding Adaptive Tree · Adaptive Random Forest · Streaming Random Patches | `models/streaming.py:make_model` |
-| **Trigger** | none (frozen) · shared schedule · dynamic PHT · ADWIN/KSWIN detector · blind periodic clock (`C_freq`, `ARF_freq`, `SRP_freq`) · dual (recon+class) PHT · continuous (learn every sample) | `drift/schedule.py`, runner |
-| **Augmenter** | none · vanilla GAN · bootstrap+jitter · conditional WGAN-GP | `augment/`, `_make_augmenter` |
-| **Monitor** | none · autoencoder · PCA reconstruction · KS · MMD · mean-shift · D3 discriminative (published comparator) | `early/`, `_make_monitor` |
+| **Trigger** | shared schedule · dynamic PHT · ADWIN/KSWIN detector · blind periodic clock (`*_freq`) · dual (recon+class) PHT · continuous (learn every sample) | `drift/schedule.py`, runner |
+| **Monitor** | none · autoencoder · PCA reconstruction · KS · MMD · mean-shift · HDDDM · D3 (published comparators) | `early/`, `_make_monitor` |
 
 The **trigger** slot is where the research contribution lives: the study is about
 *when* adaptation fires. The blind periodic clock exists solely as its control —
@@ -35,16 +33,12 @@ flowchart LR
     P --> M[model.predict_one]
     M --> E[0/1 error + rolling F1]
     E --> T{trigger?}
-    T -- "frozen (A)" --> S
-    T -- "schedule / PHT / ADWIN / KSWIN / periodic" --> W[open retrain window]
-    T -- "dual recon+class PHT (early)" --> W
+    T -- "schedule / PHT / ADWIN / KSWIN / periodic" --> W[open training window]
+    T -- "dual recon+class PHT (PACE)" --> W
     T -- "continuous (ARF/SRP)" --> W
-    W --> G{augmenter?}
-    G -- "GAN / cGAN / jitter" --> A2[learn_one on synthetic ATTACK]
-    G -- "none" --> LW[learn_one on real samples in window]
-    A2 --> LW
+    W --> LW[learn_one on samples in window]
     LW --> S
-    subgraph monitor [background monitor, early phases]
+    subgraph monitor [background monitor, proactive arms]
       MO[reconstruction / shift score] --> RP[PHT_recon] --> T
     end
 ```
@@ -77,55 +71,51 @@ is** — not "keep learning forever".
   fire adaptation, and the pairing of the two fire streams yields the lead-time
   analysis.
 
-### Augmenters (`augment/`)
-Drift-time synthetic-sample generators, all behind one `fit_generate` protocol
-with self-reported `t_train`/`t_generate` cost. `FeatureScaler` (in `base.py`)
-standardises features before generation and inverts afterwards — the fix that
-made the vanilla and conditional GANs stop collapsing to identical output.
-
 ### Monitors (`early/`)
 Background covariate-shift detectors sharing one protocol: a **frozen reference
 frame** set on the first check, then, on every later check, **score before
 updating the reference** so a distribution change shows up as a *leading* spike.
-The autoencoder (`reconstruction_monitor.py`) is the original proposal;
-`shift_monitors.py` adds cheap ablations (PCA reconstruction, KS, MMD,
-mean-shift) plus **D3** (Gözüaçık et al., CIKM 2019), the published unsupervised
-detector used as an external comparator — all under the identical protocol, so
-arms differ in the *signal* and nothing else.
+`shift_monitors.py` holds the cheap statistics (PCA reconstruction, KS, MMD,
+mean-shift) and the published comparators — **HDDDM** (Ditzler & Polikar, CIDUE
+2011) and **D3** (Gözüaçık et al., CIKM 2019), the latter also with its own native
+window and threshold — while `reconstruction_monitor.py` holds the autoencoder.
+All share the identical protocol, so arms differ in the *signal* and nothing
+else, and each one's Page-Hinkley threshold is calibrated to a common fire count
+(`scripts/calibrate_monitor.py`).
 
 Sharing the protocol is what makes the monitor slot a fair experiment, and it
-produced the study's least expected result: monitors that detect comparably do
-**not** trigger comparably. Because the monitor decides *where* training windows
-open, a mis-placed signal skews the label composition the learner is fed and can
-collapse it into a high-false-positive regime — so monitors must be judged by
-closed-loop stability, not detectability
+produced the study's least expected result. Because the monitor decides *where*
+training windows open, a mis-placed signal skews the label composition the learner
+is fed and can collapse it into a high-false-positive regime — and at matched fire
+count this happens to **every** trigger tested, published detectors included, on a
+substantial fraction of runs. Monitors must therefore be judged by closed-loop
+stability rather than detectability
 ([experiment 7](experiments/07-unsupervised-comparator.md)).
 
 ### Metrics (`metrics/`)
 Rolling O(1) F1, per-event recovery (RT / AUD / min-F1 / no-recovery with
 explicit handling of F1-undefined windows), and a cost tracker (per-sample
 latency percentiles + named component sections + RSS). See
-[methodology.md](methodology.md) §2 and §7.
+[methodology.md](methodology.md) §2 and §5.
 
 ## 3. Phase taxonomy
 
-Fifteen phases, grouped by what they establish. (`configs/phase_*.yaml`, one YAML
-per phase, merged over `configs/base.yaml`.)
+One YAML per phase (`configs/phase_*.yaml`), merged over `configs/base.yaml`.
 
 | Group | Phases | Model | Trigger | Purpose |
 |---|---|---|---|---|
-| Core proposals & controls | A, B, C, C', C_cond, C_early | HAT | none / PHT / dual | the original study |
-| Frequency control | C_freq | HAT | periodic | timing vs frequency (#1) |
-| Monitor ablation | C_early_mean, C_early_pca | HAT | dual, cheap monitor | is the AE justified (#2) |
-| Drift-detector baselines | B_adwin, B_kswin | HAT | ADWIN / KSWIN | detector choice (#3) |
-| SOTA ensembles | ARF, SRP | ensemble | continuous | upper bound (#3) |
-| Budget-matched SOTA | ARF_sched, SRP_sched | ensemble | schedule | capacity vs supervision (#3b) |
-| Ensemble + anticipation | ARF_early, SRP_early | ensemble | dual | does the early trigger help SOTA (#3c) |
+| Reactive baselines | `B`, `B_adwin`, `B_kswin` | HAT | PHT / ADWIN / KSWIN | the arm PACE must beat, and evidence that detector choice is not the lever |
+| PACE | `C_early`, `ARF_early`, `SRP_early` | HAT / ensemble | dual recon+class PHT | the proposal, on each base learner |
+| Frequency controls | `C_freq`, `ARF_freq`, `SRP_freq` | HAT / ensemble | blind periodic clock | isolates timing from frequency |
+| Budget-matched SOTA | `ARF_sched`, `SRP_sched` | ensemble | shared schedule | isolates model capacity from supervision |
+| Continuous SOTA | `ARF`, `SRP` | ensemble | continuous | upper reference |
+| Monitor ablation | `C_early_pca`, `C_early_mean`, `C_early_ks`, `C_early_mmd` | HAT | dual, cheap monitor | how cheap can the signal be |
+| Published comparators | `C_early_hdddm`, `C_early_d3`, `C_early_d3_native`, `C_early_d3_sized` | HAT | dual / native | do published detectors trigger as well |
 
 ### Dataset profiles (`configs/datasets/`)
 The engine itself is dataset-agnostic: feature dimensionality/order is
-inferred from the first row's keys, and `models/`, `drift/`, `augment/`,
-`early/` never hardcode a column name or count. What *is* dataset-specific —
+inferred from the first row's keys, and `models/`, `drift/` and `early/` never
+hardcode a column name or count. What *is* dataset-specific —
 CSV path, target/benign-label strings, dropped identifier columns, the
 drift-rich evaluation window (`start_row`/`max_samples`), and the monitor's
 recon Page-Hinkley threshold — lives in a per-dataset YAML profile
@@ -133,14 +123,16 @@ recon Page-Hinkley threshold — lives in a per-dataset YAML profile
 `run_experiment.py` and merged `base.yaml ← phase yaml ←
 configs/datasets/<name>.yaml ← CLI` (`config.py`) — the dataset profile is the
 most-specific non-CLI layer, so it overrides a phase yaml's defaults (e.g. a
-per-dataset monitor threshold wins over the phase's calibrated-on-2017 value).
+per-dataset monitor threshold wins over the phase's calibrated-on-2017 value). A
+profile's `by_phase:` block carries values calibrated per *(dataset, phase)* pair,
+such as the blind clock's interval, and is applied after the dataset layer.
 Results are namespaced by dataset —
 `results/runs/<dataset>/<phase>/seed_<n>/` and
 `results/recovery/<dataset>_<phase>_<seed>.parquet` — except the default
 `cicids2017`, which keeps the original flat paths
 (`results/runs/<phase>/seed_<n>/`, `results/recovery/<phase>_<seed>.parquet`)
 so existing 2017 results are neither moved nor rerun. See
-[experiment 4](experiments/05-external-validity.md) for the two profiles
+[experiment 5](experiments/05-external-validity.md) for the two profiles
 (`cicids2018.yaml`, `unsw.yaml`) built on this slot.
 
 ## 4. Reproducibility
@@ -149,5 +141,5 @@ Every `(phase, seed)` run writes `results/runs/<phase>/seed_<n>/` with a
 `manifest.json` (git commit, config hash, CSV SHA-256, package versions),
 `snapshots.parquet` (rolling F1/acc every 500 samples), `drift_events.json`,
 `cost.json`, `trace.csv.gz`, and a per-event recovery parquet under
-`results/recovery/`. Seeds fix `random`/`numpy`/`torch`/model/augmenter. Config
+`results/recovery/`. Seeds fix `random`/`numpy`/`torch` and the model. Config
 lives entirely in YAML — no experiment constant is hard-coded in a module.

@@ -26,11 +26,7 @@ from driftgan.logging import get_logger
 logger = get_logger("driftgan.cli")
 
 PHASE_CONFIG = {
-    "A": "phase_a.yaml",
     "B": "phase_b.yaml",
-    "C": "phase_c.yaml",
-    "C_prime": "phase_c_prime.yaml",
-    "C_cond": "phase_c_cond.yaml",
     "C_early": "phase_c_early.yaml",
     "C_freq": "phase_c_freq.yaml",
     "B_adwin": "phase_b_adwin.yaml",

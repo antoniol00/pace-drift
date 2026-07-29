@@ -27,15 +27,14 @@ from driftgan.early.dual_pht import match_lead_times
 TIME_KEYS = [
     ("time_hat_inference_s", "HAT inference", "#8c8c8c"),
     ("time_hat_update_s", "HAT update", "#5b5b5b"),
-    ("time_monitor_s", "AE monitor", "#009E73"),
-    ("time_gan_training_s", "GAN train", "#E69F00"),
-    ("time_gan_generation_s", "GAN generate", "#f0c96b"),
+    ("time_monitor_s", "shift monitor", "#009E73"),
     ("time_other_s", "other", "#d9d9d9"),
 ]
 
 
 def available_phases() -> list[str]:
-    order = ["A", "B", "C", "C_cond", "C_prime", "C_freq", "C_early"]
+    order = ["B", "B_adwin", "B_kswin", "C_freq", "C_early",
+             "ARF_sched", "ARF_early", "SRP_sched", "SRP_early"]
     return [p for p in order
             if all((RUNS / p / f"seed_{s}" / "cost.json").exists() for s in SEEDS)]
 
@@ -95,8 +94,7 @@ def fig4_resources() -> None:
     axL.set_title("B. Latency: median → worst-case (p50/p95/p99/max)")
     axL.axhline(1.0, color="#888", lw=0.8, ls="--")
     axL.annotate("1 ms", (x[-1] + 0.3, 1.0), fontsize=8, color="#888", va="bottom")
-    axL.text(0.5, 0.97, "sub-ms typical, but GAN/AE training bursts spike the "
-             "max to ~1 s", transform=axL.transAxes, ha="center", va="top",
+    axL.text(0.5, 0.97, "sub-ms typical; the monitor's periodic refit\nspikes the max to ~1 s", transform=axL.transAxes, ha="center", va="top",
              fontsize=8.5, color="#555")
     # simple percentile legend via grey ramp
     axL.legend(title="percentile", fontsize=8, title_fontsize=8, ncol=4,

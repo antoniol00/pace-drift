@@ -33,7 +33,7 @@ from collections import deque
 import numpy as np
 from scipy.stats import ks_2samp
 
-from driftgan.augment.base import FeatureScaler
+from driftgan.early.scaling import FeatureScaler
 
 
 class ShiftMonitor:

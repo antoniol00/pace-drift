@@ -1,15 +1,15 @@
-"""Publication-quality figures for the DriftGAN full-run verdict.
+"""Publication-quality figures for the PACE results.
 
-Builds the paper figures that tell the honest story:
-  fig1  local F1 across the stream    -> A collapses, B/C overlap (GAN null),
-        C_early holds up in the drift-dense second half (the win).
-  fig2  Realistic recovery comparison  -> final F1 per phase (with per-seed
-        spread) + RT/AUD with 95% CI, showing GAN adaptation ~ reactive baseline.
-  fig3  Early-detection evidence       -> lead-time distribution (anticipation)
-        + cost/benefit (memory vs F1).
-  fig6  Frequency-control ablation     -> C_freq (same adaptation count as
-        C_early, blind periodic timing) falls below baseline B, proving the
-        gain is *when* it adapts, not *how often*.
+  fig1   local F1 across the stream    -> where the arms diverge, and by how much
+  fig3   anticipation evidence         -> lead-time distribution + cost/benefit
+  fig6   frequency control             -> a blind clock at PACE's own fire count
+  fig8   streaming SOTA context        -> ARF / SRP learning from every sample
+  fig9   monitor ablation in-pipeline  -> the signal behind the same policy
+  fig10  budget-matched SOTA           -> capacity vs continuous supervision
+  fig11  trigger x base learner        -> the trigger transfers to the ensembles
+  fig12  external validity             -> three datasets x three learners
+  fig13  timing vs frequency           -> the decomposition at matched count
+  fig15  closed-loop stability         -> per-seed collapse by trigger
 (fig4 resources and fig5 sensitivity live in scripts/reviewer_analysis.py.)
 
 Colours: Okabe-Ito (colour-blind safe by construction), one fixed hue per phase.
@@ -35,22 +35,28 @@ SEEDS = [0, 1, 2, 3, 4]
 
 # One fixed hue per phase (colour follows the entity, never the rank).
 COLOR = {
-    "A": "#999999",        # frozen  -> muted grey (degraded control)
-    "B": "#0072B2",        # reactive PHT -> blue (baseline)
-    "C": "#E69F00",        # GAN vanilla  -> orange
-    "C_cond": "#56B4E9",   # conditional WGAN-GP -> sky
-    "C_prime": "#CC79A7",  # bootstrap+jitter -> purple (naive control)
-    "C_freq": "#D55E00",   # periodic-clock control -> vermillion
-    "C_early": "#009E73",  # generative monitor -> green (the win)
+    "B": "#0072B2",          # reactive Page-Hinkley -> blue (baseline)
+    "B_adwin": "#56B4E9",    # reactive ADWIN -> sky
+    "B_kswin": "#CC79A7",    # reactive KSWIN -> purple
+    "C_freq": "#D55E00",     # blind periodic clock -> vermillion
+    "C_early": "#009E73",    # PACE -> green
+    # Ensembles reuse the trigger's hue, muted, so a figure mixing base learners
+    # still reads "reactive vs proactive" at a glance.
+    "ARF_sched": "#4a90c4",
+    "SRP_sched": "#2e6f9e",
+    "ARF_early": "#4fbf9a",
+    "SRP_early": "#2f8f70",
 }
 LABEL = {
-    "A": "A · frozen",
-    "B": "B · reactive PHT",
-    "C": "C · GAN",
-    "C_cond": "C_cond · cond. WGAN-GP",
-    "C_prime": "C' · bootstrap+jitter",
-    "C_freq": "C_freq · periodic ctrl",
-    "C_early": "C_early · gen. monitor",
+    "B": "reactive (Page-Hinkley)",
+    "B_adwin": "reactive (ADWIN)",
+    "B_kswin": "reactive (KSWIN)",
+    "C_freq": "blind periodic clock",
+    "C_early": "PACE (covariate-shift trigger)",
+    "ARF_sched": "ARF reactive",
+    "SRP_sched": "SRP reactive",
+    "ARF_early": "ARF + PACE",
+    "SRP_early": "SRP + PACE",
 }
 
 plt.rcParams.update(
@@ -128,16 +134,15 @@ def parse_ci(s: str) -> tuple[float, float]:
 def fig1_trajectory() -> None:
     fig, ax = plt.subplots(figsize=(11, 4.8))
 
-    # small vertical nudges so co-located end-labels (B≈C≈0.79) don't overlap
-    lbl_dy = {"A": 0, "B": 9, "C": -9, "C_early": 0}
-    for phase in ["A", "B", "C", "C_early"]:
+    lbl_dy = {"B": 9, "C_freq": -9, "C_early": 0}
+    for phase in ["B", "C_freq", "C_early"]:
         idx, mean, std = load_trajectory(phase)
         ax.fill_between(idx, mean - std, mean + std, color=COLOR[phase],
                         alpha=0.12, lw=0, zorder=2)
         ax.plot(idx, mean, color=COLOR[phase], lw=2.2, zorder=3,
                 label=LABEL[phase])
         good = np.isfinite(mean)
-        ax.annotate(f"{phase}  {mean[good][-1]:.2f}",
+        ax.annotate(f"{mean[good][-1]:.2f}",
                     (idx[good][-1], mean[good][-1]),
                     xytext=(8, lbl_dy[phase]), textcoords="offset points",
                     va="center", color=COLOR[phase], fontweight="bold",
@@ -149,16 +154,16 @@ def fig1_trajectory() -> None:
                 va="bottom", fontsize=9, color="#b1553f", style="italic")
 
     ax.set_xlabel("stream position (samples processed)")
-    ax.set_ylabel("local F1  (50K-sample bins, mean ± 1 s.d., 5 seeds)")
+    ax.set_ylabel("local F1  (50K-sample bins, mean ± 1 s.d.)")
     ax.set_title("Where detection quality holds — and where it diverges")
     ax.set_ylim(0, 1.02)
     ax.set_xlim(0, 2.05e6)
     ax.xaxis.set_major_formatter(lambda v, _: f"{v/1e6:.1f}M" if v else "0")
     ax.legend(loc="upper right", ncol=2)
-    txt = ("Easy stretch (~0.6–1.0M): every adaptive strategy is high. GAN (C) even "
-           "trails reactive PHT (B) early — it adds nothing.\nIn the drift-dense "
-           "second half only the generative early-monitor (C_early) holds F1 up "
-           "(+0.10–0.14 over B); frozen (A) has collapsed.")
+    txt = ("Easy stretch (~0.6–1.0M): every adaptive strategy is high, and adapting "
+           "on a blind clock is already the worst of the three.\nIn the drift-dense "
+           "second half the covariate-shift trigger holds F1 up over the reactive "
+           "baseline, while the blind clock falls well below it.")
     ax.text(0.5, 1.11, txt, transform=ax.transAxes, ha="center", va="bottom",
             fontsize=9, color="#555555")
     fig.savefig(OUT / "fig1_f1_trajectory.png")
@@ -167,82 +172,6 @@ def fig1_trajectory() -> None:
 
 # --------------------------------------------------------------------------- #
 # Figure 2 — realistic recovery comparison
-# --------------------------------------------------------------------------- #
-def fig2_recovery(summ: pd.DataFrame) -> None:
-    order = ["A", "B", "C", "C_cond", "C_prime", "C_early"]
-    fig, (axL, axR) = plt.subplots(1, 2, figsize=(12, 4.8),
-                                   gridspec_kw={"width_ratios": [1, 1.15]})
-
-    # -- left: final F1 per phase, bar = mean, dots = seeds -----------------
-    xs = np.arange(len(order))
-    for i, ph in enumerate(order):
-        vals = summ.loc[summ.phase == ph, "final_f1"].values
-        axL.bar(i, vals.mean(), width=0.62, color=COLOR[ph], alpha=0.85,
-                zorder=2, edgecolor="white", linewidth=1)
-        jit = (np.random.default_rng(0).random(len(vals)) - 0.5) * 0.22
-        axL.scatter(i + jit, vals, color="#222222", s=18, zorder=3)
-        axL.annotate(f"{vals.mean():.3f}", (i, vals.mean()),
-                     xytext=(0, 4), textcoords="offset points",
-                     ha="center", fontsize=9, fontweight="bold")
-    axL.set_xticks(xs)
-    axL.set_xticklabels([p.replace("_", "\n") for p in order], fontsize=9)
-    axL.set_ylabel("final F1  (bar = mean, dots = seeds)")
-    axL.set_title("A. Final detection quality")
-    axL.set_ylim(0, 1.05)
-
-    # -- right: RT & AUD with 95% CI (the honest 'GAN ~ baseline') ----------
-    rec = ["B", "C", "C_cond", "C_prime"]  # PHT phases; C_early recovery is confounded
-    summ.groupby("phase")
-    # pull RT/AUD from recovery parquets (per-event), aggregate mean + bootstrap CI
-    def agg(metric: str) -> tuple[list, list, list]:
-        means, los, his = [], [], []
-        for ph in rec:
-            vals = []
-            for s in SEEDS:
-                r = pd.read_parquet(REC / f"{ph}_{s}.parquet")
-                vals.append(r[metric].dropna().values)
-            v = np.concatenate(vals)
-            rng = np.random.default_rng(0)
-            boot = [rng.choice(v, len(v)).mean() for _ in range(2000)]
-            means.append(v.mean())
-            los.append(np.percentile(boot, 2.5))
-            his.append(np.percentile(boot, 97.5))
-        return means, los, his
-
-    rt_m, rt_lo, rt_hi = agg("RT")
-    aud_m, aud_lo, aud_hi = agg("AUD")
-    x = np.arange(len(rec))
-    w = 0.36
-    cols = [COLOR[p] for p in rec]
-    # RT on left axis feel: put RT and AUD as two grouped series but same unit
-    # (both are 'samples'); AUD dwarfs RT so use a broken presentation: two rows.
-    axR.bar(x - w / 2, rt_m, w, color=cols, alpha=0.55, edgecolor="white",
-            yerr=[np.array(rt_m) - rt_lo, np.array(rt_hi) - rt_m],
-            capsize=3, ecolor="#444", label="_")
-    axR.bar(x + w / 2, aud_m, w, color=cols, alpha=0.95, edgecolor="white",
-            yerr=[np.array(aud_m) - aud_lo, np.array(aud_hi) - aud_m],
-            capsize=3, ecolor="#444", label="_")
-    axR.set_xticks(x)
-    axR.set_xticklabels([p.replace("_", "\n") for p in rec])
-    axR.set_ylabel("recovery cost, samples  (95% CI)")
-    axR.set_title("B. Recovery cost — RT (light) vs AUD (solid)")
-    axR.set_ylim(0, max(aud_hi) * 1.28)
-    for xi, (rtm, audm) in enumerate(zip(rt_m, aud_m, strict=False)):
-        axR.annotate(f"{rtm:.0f}", (xi - w / 2, rtm), xytext=(0, 3),
-                     textcoords="offset points", ha="center", fontsize=8)
-        axR.annotate(f"{audm:.0f}", (xi + w / 2, audm), xytext=(0, 3),
-                     textcoords="offset points", ha="center", fontsize=8)
-    axR.text(0.5, 0.88, "No GAN variant beats baseline B: RT is indistinguishable "
-             "(Wilcoxon p=0.62 for C),\nand C_cond / C' are significantly WORSE on "
-             "AUD. Reactive generation does not help.",
-             transform=axR.transAxes, ha="center", va="top", fontsize=8.5,
-             color="#555")
-    fig.savefig(OUT / "fig2_recovery_comparison.png")
-    plt.close(fig)
-
-
-# --------------------------------------------------------------------------- #
-# Figure 3 — early-detection evidence
 # --------------------------------------------------------------------------- #
 def fig3_early(summ: pd.DataFrame) -> None:
     fig, (axL, axR) = plt.subplots(1, 2, figsize=(12, 4.8),
@@ -278,31 +207,32 @@ def fig3_early(summ: pd.DataFrame) -> None:
     axL.set_xticks(SEEDS)
     axL.set_xlabel("seed")
     axL.set_ylabel("anticipation lead time  (thousands of samples)")
-    axL.set_title("A. The monitor fires *before* the drift (C_early)")
+    axL.set_title("A. The monitor fires *before* the drift")
 
     # -- right: cost / benefit -- memory vs final F1 -----------------------
-    order = ["A", "B", "C", "C_cond", "C_prime", "C_early"]
-    # hand-tuned label offsets to avoid the A/B/C_prime cluster at ~780 MB
-    off = {"A": (10, -4), "B": (10, 8), "C_prime": (10, -12),
-           "C": (10, 8), "C_cond": (10, -4), "C_early": (-12, 12)}
+    order = ["B", "B_adwin", "B_kswin", "C_freq", "C_early"]
+    off = {"B": (10, 8), "B_adwin": (10, -4), "B_kswin": (10, -12),
+           "C_freq": (10, 8), "C_early": (-12, 12)}
     ha = {"C_early": "right"}
     for ph in order:
         sub = summ[summ.phase == ph]
+        if sub.empty:
+            continue
         x = sub["peak_rss_mb"].mean()
         y = sub["final_f1"].mean()
         axR.scatter(x, y, s=170, color=COLOR[ph], edgecolor="white",
                     linewidth=1.5, zorder=3)
-        axR.annotate(ph, (x, y), xytext=off[ph], textcoords="offset points",
-                     ha=ha.get(ph, "left"), fontsize=9, fontweight="bold",
-                     color=COLOR[ph])
-    axR.set_xlim(720, 1680)
+        axR.annotate(LABEL[ph].split(" (")[0], (x, y), xytext=off[ph],
+                     textcoords="offset points", ha=ha.get(ph, "left"),
+                     fontsize=9, fontweight="bold", color=COLOR[ph])
     axR.set_xlabel("peak memory (MB)")
     axR.set_ylabel("final F1")
     axR.set_title("B. Cost vs benefit")
     axR.set_ylim(0.3, 1.05)
-    axR.text(0.97, 0.30, "C_early buys +0.20 final-F1\nfor ~2× memory;\nthe GAN "
-             "phases pay the memory\nbut not the benefit.", transform=axR.transAxes,
-             ha="right", va="top", fontsize=8.5, color="#555")
+    axR.text(0.97, 0.30, "The monitor is a linear-algebra pass\nover a small "
+             "buffer: the accuracy it buys\ncosts memory, not throughput.",
+             transform=axR.transAxes, ha="right", va="top",
+             fontsize=8.5, color="#555")
     fig.savefig(OUT / "fig3_early_detection.png")
     plt.close(fig)
 
@@ -908,7 +838,6 @@ def fig15_closed_loop_stability() -> None:
 def main() -> None:
     summ = load_summaries()
     fig1_trajectory()
-    fig2_recovery(summ)
     fig3_early(summ)
     fig6_frequency_ablation()
     fig8_sota_baselines(summ)

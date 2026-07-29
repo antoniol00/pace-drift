@@ -1,25 +1,25 @@
 """Unified prequential evaluation engine for all phases.
 
-One loop implements every phase; the differences are confined to (a) which
-trigger fires adaptation and (b) which augmenter (if any) generates
-synthetic samples at drift time:
+One loop implements every phase; phases differ only in **when adaptation
+fires**, which is the object of study:
 
-=========  ==========================  ==============================
-Phase      Trigger                     Augmenter
-=========  ==========================  ==============================
-A          none (frozen after pretrain) none
-B          PHT / shared schedule        none
-C          PHT / shared schedule        VanillaGanAugmenter
-C_prime    PHT / shared schedule        BootstrapJitterAugmenter
-C_cond     PHT / shared schedule        ConditionalGanAugmenter
-C_freq     periodic clock (blind)       none
-C_early    DualPHT (recon + class)      optional (config.early_augment)
-=========  ==========================  ==============================
+=================  ===================================================
+Phase              Trigger
+=================  ===================================================
+B                  reactive Page-Hinkley on classification error
+B_adwin / B_kswin  alternative error-based detectors (reactive)
+ARF / SRP          none — the ensemble learns from every sample
+*_sched            replay of the shared schedule (matched label budget)
+*_freq             blind periodic clock, count-matched to *_early
+C_early / *_early  PACE: dual Page-Hinkley over an unsupervised
+                   covariate-shift monitor plus classification error
+=================  ===================================================
 
-C_early always runs dynamically: its contribution is *anticipation*, which
-a fixed schedule would erase (see docs/methodology.md). C_freq is the
-frequency-matched control: it fires the same number of times as C_early but
-on a blind periodic clock, isolating adaptation frequency from timing.
+The proactive arms always run dynamically: their contribution is
+*anticipation*, which a fixed schedule would erase (see docs/methodology.md).
+The `*_freq` arms are the frequency-matched controls — they fire as often as
+the matching `*_early` arm but on a blind clock, isolating adaptation timing
+from adaptation frequency.
 """
 
 from __future__ import annotations
@@ -37,7 +37,6 @@ import pandas as pd
 from river import drift as river_drift
 from river import metrics as river_metrics
 
-from driftgan.augment.base import Buffer
 from driftgan.config import ExperimentConfig
 from driftgan.data.stream import ATTACK, BENIGN, stream_csv
 from driftgan.drift.schedule import (
@@ -81,50 +80,6 @@ class RunResult:
     lead_time_report: dict[str, Any] | None = None
     cost_summary: dict[str, Any] = field(default_factory=dict)
     label_dist: dict[str, int] = field(default_factory=dict)
-
-
-def _make_augmenter(phase: str, config: ExperimentConfig, seed: int) -> Any:
-    if phase == "C":
-        from driftgan.augment.vanilla_gan import VanillaGanAugmenter
-
-        return VanillaGanAugmenter(
-            noise_dim=config.gan_noise_dim,
-            epochs=config.gan_epochs,
-            lr=config.gan_lr,
-            device=config.device,
-            seed=seed,
-        )
-    if phase == "C_prime":
-        from driftgan.augment.bootstrap_jitter import BootstrapJitterAugmenter
-
-        return BootstrapJitterAugmenter(sigma_scale=config.jitter_sigma_scale, seed=seed)
-    if phase == "C_cond":
-        from driftgan.augment.cgan import ConditionalGanAugmenter
-
-        return ConditionalGanAugmenter(
-            noise_dim=config.gan_noise_dim,
-            epochs=config.gan_epochs,
-            lr=config.gan_lr,
-            n_critic=config.cgan_n_critic,
-            gp_lambda=config.cgan_gp_lambda,
-            use_spectral_norm=config.cgan_spectral_norm,
-            loss=config.cgan_loss,
-            label_smoothing=config.cgan_label_smoothing,
-            feature_matching=config.cgan_feature_matching,
-            device=config.device,
-            seed=seed,
-        )
-    if phase == "C_early" and config.early_augment:
-        from driftgan.augment.vanilla_gan import VanillaGanAugmenter
-
-        return VanillaGanAugmenter(
-            noise_dim=config.gan_noise_dim,
-            epochs=config.gan_epochs,
-            lr=config.gan_lr,
-            device=config.device,
-            seed=seed,
-        )
-    return None
 
 
 def _make_monitor(config: ExperimentConfig, seed: int) -> ReconstructionMonitor | ShiftMonitor:
@@ -241,8 +196,6 @@ def run_phase(
         )
         monitor = _make_monitor(config, seed)
 
-    augmenter = _make_augmenter(phase, config, seed)
-
     # ── state ────────────────────────────────────────────────────────
     snap_indices: list[int] = []
     snap_f1: list[float] = []
@@ -265,21 +218,6 @@ def run_phase(
         trace_file = gzip.open(run_dir / "trace.csv.gz", "wt", newline="")
         trace_writer = csv.writer(trace_file)
         trace_writer.writerow(["index", "y_true", "y_raw", "y_pred", "correct"])
-
-    def do_augment() -> int:
-        """Generate synthetic attacks from the buffer and feed them to HAT."""
-        if augmenter is None:
-            return 0
-        attack_buffer: Buffer = [(bx, by_raw) for bx, by, by_raw in recent_buffer if by == ATTACK]
-        if len(attack_buffer) < config.min_attack_samples:
-            return 0
-        synthetic = augmenter.fit_generate(attack_buffer, config.n_synthetic)
-        tracker.add("gan_training", getattr(augmenter, "t_train", 0.0))
-        tracker.add("gan_generation", getattr(augmenter, "t_generate", 0.0))
-        with tracker.section("hat_update"):
-            for syn_x in synthetic:
-                model.learn_one(syn_x, ATTACK)
-        return len(synthetic)
 
     log_ctx(logger, logging.INFO, "run started", phase=phase, seed=seed, dynamic=force_dynamic or not config.drift_schedule)
 
@@ -345,14 +283,11 @@ def run_phase(
             if fired:
                 training_enabled = True
                 samples_to_train = config.train_window
-                n_syn = do_augment()
-                drift_events.append(
-                    {"index": n_processed, "source": fire_source, "n_synthetic": n_syn}
-                )
+                drift_events.append({"index": n_processed, "source": fire_source})
                 if len(drift_events) <= 30:
                     log_ctx(
                         logger, logging.INFO, "drift fired",
-                        index=n_processed, source=fire_source, n_synthetic=n_syn,
+                        index=n_processed, source=fire_source,
                     )
 
             if continuous:

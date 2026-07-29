@@ -1,9 +1,12 @@
-SEEDS ?= 0,1,2,3,4
+SEEDS ?= 0,1,2,3,4,5,6,7,8,9
 N_JOBS ?= 5
 NJOBS ?= $(N_JOBS)
 SCHEDULE ?= results/drift_schedule.json
 
-.PHONY: setup test lint typecheck smoke schedule run-A run-B run-C run-C-prime run-C-cond run-C-early run-all report clean-results
+.PHONY: setup test lint typecheck smoke schedule report clean-results \
+        run-reactive run-pace run-freq run-sota run-sota-matched run-early-ensemble \
+        run-comparators run-anchor schedule-2018 schedule-unsw run-2018 run-unsw \
+        analyse figures
 
 setup:
 	uv sync --dev
@@ -17,66 +20,64 @@ lint:
 typecheck:
 	uv run mypy
 
-# Quick end-to-end sanity check against the real CSV (10K samples, 1 seed).
+# Quick end-to-end sanity check against the real CSV. Seed 99 is deliberate: the
+# 2017 anchor writes to flat paths, so a throwaway run on an experiment seed
+# would silently overwrite a real multi-hour result.
 smoke:
-	uv run python run_experiment.py --phase B --seeds 0 --max-samples 10000
+	uv run python run_experiment.py --phase B --seeds 99 --max-samples 10000
 
-# Pass 0: build the shared drift schedule from Phase B dynamics.
+# Pass 0: build the shared drift schedule from the reactive baseline's dynamics.
 schedule:
 	uv run python run_experiment.py --build-schedule --out $(SCHEDULE)
 
-run-A:
-	uv run python run_experiment.py --phase A --seeds $(SEEDS) --n-jobs $(N_JOBS)
-
-run-B:
+# ── CIC-IDS2017 anchor ────────────────────────────────────────────────
+# Reactive baselines: adaptation driven by the classification error.
+run-reactive:
 	uv run python run_experiment.py --phase B --seeds $(SEEDS) --n-jobs $(N_JOBS) --drift-schedule $(SCHEDULE)
-
-run-C:
-	uv run python run_experiment.py --phase C --seeds $(SEEDS) --n-jobs $(N_JOBS) --drift-schedule $(SCHEDULE)
-
-run-C-prime:
-	uv run python run_experiment.py --phase C_prime --seeds $(SEEDS) --n-jobs $(N_JOBS) --drift-schedule $(SCHEDULE)
-
-run-C-cond:
-	uv run python run_experiment.py --phase C_cond --seeds $(SEEDS) --n-jobs $(N_JOBS) --drift-schedule $(SCHEDULE)
-
-# C_early always runs dynamically: its contribution is anticipation.
-run-C-early:
-	uv run python run_experiment.py --phase C_early --seeds $(SEEDS) --n-jobs $(N_JOBS)
-
-# C_freq: frequency-matched control for C_early (blind periodic clock, no schedule).
-run-C-freq:
-	uv run python run_experiment.py --phase C_freq --seeds $(SEEDS) --n-jobs $(N_JOBS)
-
-# SOTA baselines (Experiment #3): alternative detectors + self-adapting ensembles.
-run-sota:
 	uv run python run_experiment.py --phase B_adwin --seeds $(SEEDS) --n-jobs $(N_JOBS)
 	uv run python run_experiment.py --phase B_kswin --seeds $(SEEDS) --n-jobs $(N_JOBS)
+
+# PACE. Always dynamic: its contribution is anticipation, which a fixed
+# schedule would erase.
+run-pace:
+	uv run python run_experiment.py --phase C_early --seeds $(SEEDS) --n-jobs $(N_JOBS)
+
+# Frequency-matched control: blind periodic clock at PACE's fire count.
+run-freq:
+	uv run python run_experiment.py --phase C_freq --seeds $(SEEDS) --n-jobs $(N_JOBS)
+
+# Streaming ensembles learning from every sample (upper reference).
+run-sota:
 	uv run python run_experiment.py --phase ARF --seeds $(SEEDS) --n-jobs $(N_JOBS)
 	uv run python run_experiment.py --phase SRP --seeds $(SEEDS) --n-jobs $(N_JOBS)
 
-# Budget-matched SOTA (#3b): ARF/SRP adapting only in triggered windows on the schedule.
+# The same ensembles at the reactive arm's label budget.
 run-sota-matched:
 	uv run python run_experiment.py --phase ARF_sched --seeds $(SEEDS) --n-jobs $(N_JOBS) --drift-schedule $(SCHEDULE)
 	uv run python run_experiment.py --phase SRP_sched --seeds $(SEEDS) --n-jobs $(N_JOBS) --drift-schedule $(SCHEDULE)
 
-# Ensemble + proactive early-detection trigger (#3c): does anticipation help the SOTA model?
+# PACE on the ensembles: does the trigger help the strongest models too?
 run-early-ensemble:
 	uv run python run_experiment.py --phase ARF_early --seeds $(SEEDS) --n-jobs $(N_JOBS)
 	uv run python run_experiment.py --phase SRP_early --seeds $(SEEDS) --n-jobs $(N_JOBS)
 
-run-all: schedule run-A run-B run-C run-C-prime run-C-cond run-C-freq run-C-early
+# Monitor ablation and published comparators, all fire-count matched to the
+# autoencoder. Run to 20 seeds: the collapse outcome is bimodal.
+COMPARATORS = C_early_pca C_early_mean C_early_hdddm C_early_d3 C_early_d3_native C_early_d3_sized
+run-comparators:
+	@for p in $(COMPARATORS); do \
+		uv run python run_experiment.py --phase $$p \
+			--seeds 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19 \
+			--n-jobs 10; done
 
-report:
-	uv run python scripts/make_report.py
+run-anchor: schedule run-reactive run-pace run-freq run-sota run-sota-matched run-early-ensemble
 
-clean-results:
-	rm -rf results/runs results/recovery results/report results/plots
-
-# ── External-validity datasets (#4): 2018 + UNSW ──────────────────────
+# ── External-validity datasets: CIC-IDS2018 + UNSW-NB15 ───────────────
+# Each dataset pins its own calibrated monitor threshold and blind-clock
+# interval in configs/datasets/<name>.yaml — never pass those as CLI flags.
 DATA2018 ?= cicids2018
 DATAUNSW ?= unsw
-MINPHASES = C_early ARF_early SRP_early
+DYNPHASES = C_early ARF_early SRP_early ARF_freq SRP_freq
 SCHEDPHASES = B ARF_sched SRP_sched
 
 schedule-2018:
@@ -87,20 +88,36 @@ schedule-unsw:
 	uv run python run_experiment.py --build-schedule --dataset $(DATAUNSW) \
 		--config configs/phase_b.yaml --out results/drift_schedule_$(DATAUNSW).json
 
-run-min-2018:
+run-2018:
 	@for p in $(SCHEDPHASES); do \
 		uv run python run_experiment.py --phase $$p --dataset $(DATA2018) \
 			--drift-schedule results/drift_schedule_$(DATA2018).json \
 			--seeds $(SEEDS) --n-jobs $(NJOBS); done
-	@for p in $(MINPHASES); do \
+	@for p in $(DYNPHASES); do \
 		uv run python run_experiment.py --phase $$p --dataset $(DATA2018) \
 			--seeds $(SEEDS) --n-jobs $(NJOBS); done
 
-run-min-unsw:
+run-unsw:
 	@for p in $(SCHEDPHASES); do \
 		uv run python run_experiment.py --phase $$p --dataset $(DATAUNSW) \
 			--drift-schedule results/drift_schedule_$(DATAUNSW).json \
 			--seeds $(SEEDS) --n-jobs $(NJOBS); done
-	@for p in $(MINPHASES); do \
+	@for p in $(DYNPHASES); do \
 		uv run python run_experiment.py --phase $$p --dataset $(DATAUNSW) \
 			--seeds $(SEEDS) --n-jobs $(NJOBS); done
+
+# ── Analysis (loads persisted artifacts; never re-runs the stream) ─────
+analyse:
+	uv run python scripts/tier0_analysis.py
+	uv run python scripts/tier1_analysis.py
+	uv run python scripts/comparator_analysis.py
+
+figures:
+	uv run python scripts/paper_figures.py
+	uv run python scripts/reviewer_analysis.py
+
+report:
+	uv run python scripts/make_report.py
+
+clean-results:
+	rm -rf results/runs results/recovery results/report results/plots

@@ -4,11 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-**PACE Drift** (repo `pace-drift`) — a concept-drift research project for streaming network intrusion detection. **PACE** = *Proactive Adaptation via Covariate-shift Estimation*: an unsupervised monitor over incoming traffic triggers adaptation *before* classification error rises, with learning gated to short triggered windows (`C_early`, `ARF_early`, `SRP_early`). The research contribution is the **when-to-adapt policy**, validated on CICIDS2017 + CIC-IDS2018 + UNSW-NB15 × HAT/ARF/SRP against budget-matched controls that separate adaptation *timing* from *frequency* (`*_freq`, blind periodic clock) and from *model capacity* (`*_sched`). A second contribution is **closed-loop stability as the criterion for trigger quality**: at matched fire count over 20 seeds *every* trigger tested — ours, the published D3 and HDDDM, cheap PCA and mean-shift — collapses the learner into a high-false-positive regime on 20–60% of runs, through a verified training-distribution mechanism that detection metrics and final-window F1 both hide. Note what this does **not** say: our monitor is *not* measurably more stable than the published detectors (an earlier 5-seed claim to that effect was retracted at n=20 — see the revision banner in `docs/experiments/07-unsupervised-comparator.md`). Never quote a collapse-count asymmetry from fewer than 20 seeds; the outcome is bimodal.
+**PACE Drift** (repo `pace-drift`) — a concept-drift research project for streaming network intrusion detection. **PACE** = *Proactive Adaptation via Covariate-shift Estimation*: an unsupervised monitor over incoming traffic triggers adaptation *before* classification error rises, with learning gated to short triggered windows (`C_early`, `ARF_early`, `SRP_early`). The research contribution is the **when-to-adapt policy**, validated on CICIDS2017 + CIC-IDS2018 + UNSW-NB15 × HAT/ARF/SRP against budget-matched controls that separate adaptation *timing* from *frequency* (`*_freq`, blind periodic clock) and from *model capacity* (`*_sched`). A second contribution is **closed-loop stability as the criterion for trigger quality**: at matched fire count over 20 seeds *every* trigger tested — ours, the published D3 and HDDDM, cheap PCA and mean-shift — collapses the learner into a high-false-positive regime on 20–60% of runs, through a verified training-distribution mechanism that detection metrics and final-window F1 both hide. Note what this does **not** say: our monitor is *not* measurably more stable than the published detectors. Never quote a collapse-count asymmetry from fewer than 20 seeds; the outcome is bimodal.
 
-The project began as *DriftGAN* (generating synthetic attack samples at drift time, phases C/C_cond); under budget-matched controls that augmentation gave no measurable benefit, and the code path is kept only so the controlled refutation stays reproducible. **Do not reframe the project around the generative angle.** Note the Python package is still `driftgan` — that is deliberate (import stability), not a leftover: `src/driftgan/` paths in docs are correct.
+Note the Python package is `driftgan` — a historical name kept deliberately for import stability, not a leftover: `src/driftgan/` paths in docs are correct.
 
-Start with docs/paper/idea-central.md (the hypothesis→findings trail), then README.md, docs/methodology.md (protocol), docs/paper/related-work.md (positioning + citation verification status) and docs/experiments/ (per-experiment results, numbered 00–07).
+Start with docs/paper/idea-central.md (what is claimed and on what evidence), then README.md, docs/methodology.md (protocol), docs/paper/related-work.md (positioning + citation verification status) and docs/experiments/ (per-experiment results, numbered 00–08).
 
 ## Environment and commands
 
@@ -25,7 +25,7 @@ make report       # aggregate tables + figures into results/report/ (2017 anchor
 uv run pytest tests/test_recovery.py             # single file
 uv run pytest tests/test_early.py -k dual_pht    # single test
 uv run python run_experiment.py --phase C --seeds 0,1 --n-jobs 2 --max-samples 100000
-make schedule && make run-all SEEDS=0,1,2,3,4    # full experiment (hours)
+make run-anchor                                  # full 2017 experiment (hours)
 ```
 
 CI (`.github/workflows/ci.yml`) runs lint + typecheck + tests on every push and PR, so all three must pass before committing.
@@ -46,19 +46,19 @@ uv run python run_experiment.py --phase B --seeds 99 --max-samples 10000
 
 ## Architecture (src/driftgan/)
 
-One prequential engine runs every phase: `experiments/runner.py:run_phase` differs per phase only in **trigger** (none / PHT / shared schedule / ADWIN / KSWIN / blind periodic / dual recon+class PHT) and **augmenter** (none / vanilla GAN / jitter / conditional WGAN-GP). When adding a phase or strategy, extend `_make_augmenter` and the trigger selection there — do not fork the loop. A new phase name must be registered in **three** places or it fails late: `config.py:VALID_PHASES`, `run_experiment.py:PHASE_CONFIG`, and the trigger branch in `runner.py:run_phase` (plus a `configs/phase_<name>.yaml`).
+One prequential engine runs every phase: `experiments/runner.py:run_phase` differs per phase only in **trigger** (PHT / shared schedule / ADWIN / KSWIN / blind periodic / dual recon+class PHT / continuous) and **monitor** (none / AE / PCA / KS / MMD / mean-shift / HDDDM / D3). When adding a strategy, extend `_make_monitor` and the trigger selection there — do not fork the loop. A new phase name must be registered in **three** places or it fails late: `config.py:VALID_PHASES`, `run_experiment.py:PHASE_CONFIG`, and the trigger branch in `runner.py:run_phase` (plus a `configs/phase_<name>.yaml`).
 
 Load-bearing design decisions (details in docs/methodology.md):
 
-- **Shared drift schedule** (`drift/schedule.py`): scheduled phases replay identical adaptation indices from a pass-0 JSON, so per-event metrics can be paired across phases. A report-only PHT still runs for delay measurement. C_early is deliberately exempt (its claim is anticipation). A scheduled index the stream skips is dropped, never fired late.
+- **Shared drift schedule** (`drift/schedule.py`): scheduled phases replay identical adaptation indices from a pass-0 JSON, so per-event metrics can be paired across phases. A report-only PHT still runs for delay measurement. The proactive arms are deliberately exempt (their claim is anticipation). A scheduled index the stream skips is dropped, never fired late.
 - **Recovery metrics** (`metrics/recovery.py`): snapshots carry a `valid` flag — windows with no positive true label have undefined F1 and are excluded from RT/AUD, not counted as failure. Overlapping drifts close the previous event as `no_recovery`. The unit tests encode the analytic semantics; change behavior only with matching test changes.
-- **Cost accounting** (`metrics/cost.py`): per-sample latency + named sections; augmenters self-report `t_train`/`t_generate` attributes which the runner credits via `tracker.add` — new augmenters must set both.
+- **Cost accounting** (`metrics/cost.py`): per-sample latency + named sections (`hat_inference`, `hat_update`, `monitor`, `other`).
 - **Config** (`config.py`): every tunable lives in `ExperimentConfig`; `load_config` merges base.yaml ← phase yaml ← **dataset yaml** ← CLI overrides — the dataset layer overrides the phase layer, because per-dataset calibration must win. Never hardcode experiment constants in modules.
 - **Calibration discipline** (`early/`): each monitor's PHT threshold is calibrated per dataset so that arms differ in the *signal*, not in how often they fire; the calibrated values are pinned in the dataset profile with the evidence in a comment. A new monitor or dataset needs the same treatment, or comparisons become fire-count artifacts. `scripts/calibrate_monitor.py` does the sweep offline against a cached score series (one run, then any threshold replays for free). Values that depend on the *(dataset, phase)* pair rather than the dataset alone — the `*_freq` blind-clock interval, calibrated per learner — go in the profile's `by_phase:` block, which `load_config` applies after the dataset layer. **Never pass a calibrated value as a bare CLI flag:** doing so kept UNSW's `*_freq` interval out of every config, and a later batch of seeds silently ran de-matched (142 fires instead of 172) and had to be discarded.
 
 ## Analysis and figures
 
-Analyses load the persisted parquets/JSON — they never re-run the stream. `scripts/tier0_analysis.py` (paired CIs, Kappa, event stratification) · `tier1_analysis.py` (timing vs frequency) · `comparator_analysis.py` (monitor comparison + closed-loop stability) · `monitor_ablation.py` · `reviewer_analysis.py` (fig4/fig5) · `paper_figures.py` (fig1-3, 6, 8-13) · `make_report.py` (2017 anchor tables) · `scan_drift_window.py` (dataset window selection) · `synthetic_structure.py` / `synthetic_clustering.py` (the two pre-registered, negative synthetics).
+Analyses load the persisted parquets/JSON — they never re-run the stream. `scripts/tier0_analysis.py` (paired CIs, Kappa, event stratification) · `tier1_analysis.py` (timing vs frequency) · `comparator_analysis.py` (monitor comparison + closed-loop stability) · `monitor_ablation.py` · `reviewer_analysis.py` (fig4/fig5) · `paper_figures.py` (fig1, 3, 6, 8-13, 15) · `make_report.py` (2017 anchor tables) · `scan_drift_window.py` (dataset window selection) · `calibrate_monitor.py` (offline PHT fire-count calibration) · `synthetic_timing.py` (the controlled-stream check of the core claim).
 
 Figures are versioned in `docs/figures/` even though `results/` is not — regenerate and commit them there when the underlying numbers change, and keep the write-up in `docs/experiments/` in sync.
 
@@ -66,7 +66,6 @@ Figures are versioned in `docs/figures/` even though `results/` is not — regen
 
 - Everything in English. Structured JSON logging via `driftgan.logging` (no bare prints in library code; CLI prints are fine).
 - ruff + mypy must pass (`make lint typecheck`); type hints everywhere; NumPy-style docstrings on public functions.
-- Analysis lives in `scripts/` (load the persisted parquets/JSON and emit tables + figures); pipelines live in `src/`. The exploratory notebooks were removed in the 2026-07-25 cleanup — do not reintroduce notebooks for reported results.
-- The legacy PoC modules (`module_*`, `compare/`, `common/`, `requirements.txt`) have been removed; all work lives in `src/driftgan/` with dependencies pinned in `pyproject.toml` + `uv.lock`.
-- Negative results (generative augmentation, both synthetics) stay in the repo and in the docs. When numbers change, update the claim rather than dropping it.
+- Analysis lives in `scripts/` (load the persisted parquets/JSON and emit tables + figures); pipelines live in `src/`. Do not introduce notebooks for reported results.
+- Report only what the data supports, and state refusals to claim as clearly as claims. When numbers change, update the claim rather than dropping it. Collapse-count comparisons are held to n >= 20 — that outcome is bimodal and a handful of replicates estimates its rate badly.
 - The CIC-IDS2017 CSV lives outside the repo at `/mnt/AI-DATA-SSD/alara/Data/CIC-IDS2017.csv` (`configs/base.yaml:csv_path`).

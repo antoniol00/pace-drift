@@ -1,12 +1,9 @@
 # Experiment 7 — Unsupervised comparators and closed-loop stability
 
-> **Revision history — read this first.** The first version of this experiment
-> (5 seeds, 2026-07-24) reported *AE 0/5 collapses vs D3 4/5, Fisher p=0.048* and
-> concluded that our autoencoder monitor was uniquely stable. **Extending to 20
-> seeds on 2026-07-28 refuted that ranking.** The section below reports the
-> 20-seed numbers; §"What the extension changed" states exactly what was
-> retracted and why. The 5-seed asymmetry was sampling noise on a bimodal
-> outcome.
+> **All numbers here are over 20 seeds.** The collapse outcome is bimodal — a run
+> either stays healthy or falls into a degenerate regime, with almost nothing in
+> between — so a handful of replicates estimates its rate very badly. Collapse
+> counts in this project are held to n ≥ 20 for that reason.
 
 ## Question
 
@@ -75,30 +72,27 @@ Pooled, the autoencoder against all four alternatives is 4/20 vs 33/80,
 **p = 0.119**. Paired Wilcoxon on cumulative accuracy: only mean-shift separates
 from the AE (p = 0.004); D3 p = 0.37, PCA p = 0.28, HDDDM p = 0.99.
 
-## What survives, and what does not
+## What this establishes
 
-**Does not survive.** *"The autoencoder is uniquely stable."* It is not. It
-collapses on 4/20 seeds, HDDDM is statistically indistinguishable from it
-(5/20, p = 1.00) and so is PCA (6/20, p = 0.72). D3 is worse in point estimate
-(10/20) but not significantly so at this n. The only arm that separates is the
-trivial mean-shift floor.
+**The adaptation loop is fragile, and that is the finding.** *Every* arm —
+including ours — drives the learner into a degenerate regime on 20–60% of seeds.
+We have not found this reported anywhere in the unsupervised-drift literature,
+and it is invisible to the detection metrics that literature does report.
 
-We checked that this is genuine seed variance rather than an artifact of the
-seed blocks having been produced in different batches: collapse rates by block
-(seeds 0–4 / 5–9 / 10–19) show no block effect (Fisher p = 0.58).
+**Our monitor is not more stable than the published detectors.** HDDDM is
+statistically indistinguishable from it (5/20 vs 4/20, p = 1.00), as is PCA
+(6/20, p = 0.72). D3 is worse in point estimate (10/20) but not significantly so
+at this n. The only arm that separates is the trivial mean-shift floor — so the
+signal does matter at the bottom end, but not between the sophisticated ones.
+This is stated plainly because the criterion, not a ranking, is the contribution.
 
-**Survives.**
+**Detection metrics do not predict any of it**, and neither does final-window F1
+(one PCA seed: final F1 0.948, cumulative accuracy 0.444, FPR 0.657). Trigger
+quality has to be measured by what the trigger does to the loop.
 
-1. **Closed-loop collapse is real, common and unreported.** *Every* arm,
-   including ours, drives the learner into a degenerate regime on 20–60% of
-   seeds. That an adaptation policy of this kind is this fragile is itself the
-   finding, and we have not found it reported in the unsupervised-drift
-   literature.
-2. **The mechanism**, verified rather than hypothesised (below).
-3. **The signal matters at the bottom end.** The trivial mean-shift floor is
-   significantly worse, so this is not "any statistic will do".
-4. **`final_f1` masks collapse** — the metric lesson is unaffected.
-5. **Native D3 at the published defaults over-fires catastrophically** (below).
+Collapse rates are consistent across seed blocks (Fisher p = 0.58), so the spread
+is genuine run-to-run variance rather than an artifact of when a batch was
+produced.
 
 ## Mechanism — two distinct failure modes
 
@@ -142,35 +136,31 @@ Giving D3 its own machinery does not rescue it. The shared-protocol arm was the
 **charitable** version of D3, not a weakened one — which answers the reviewer
 objection that motivated these runs.
 
-## Consequence: experiment 2's revision is reverted
+## Consequence for the monitor choice
 
-Experiment 2 originally concluded "a cheap linear PCA monitor suffices; the
-autoencoder is over-engineered." On 2026-07-24 that was revised on the strength
-of the 5-seed stability result. **At 20 seeds the revision does not hold: PCA
-matches the AE on closed-loop stability too (6/20 vs 4/20, p = 0.72), so
-experiment 2's original conclusion stands and the paper should lead with the
-cheap linear monitor.** The `final_f1`-masks-collapse caveat remains true — it
-just does not rescue the autoencoder.
+PCA matches the autoencoder on closed-loop stability as well as on detection
+quality (6/20 vs 4/20, p = 0.72), which agrees with
+[experiment 2](02-monitor-ablation.md): the deployable configuration is the
+**cheap linear monitor**. The `final_f1`-masks-collapse caveat stands on its own
+and does not change that.
 
 ## Honest scope
 
 These are our implementations, and the native arms are not budget-matched by
 construction. The claim is about what these signals do to *this* adaptation loop
 on flow data — not a verdict on the detectors in general. Read the collapse
-counts as effect sizes on a modest number of seeds: **the ordering is the result;
+counts as effect sizes on a modest number of runs: **the ordering is the result;
 individual pairwise p-values at this n are not.** A faithful `(w, ρ)` D3 driven
-by scikit-learn's solver, and a third comparator, remain future work.
-
-**Methodological lesson worth carrying forward:** a bimodal outcome needs far
-more seeds than a mean does. Five seeds produced a clean-looking, significant and
-*wrong* ranking. Do not report a collapse-count asymmetry below n = 20.
+by scikit-learn's solver, and a third published comparator, remain future work.
 
 ## Reproducing
 
 ```bash
-uv run python run_experiment.py --phase C_early_hdddm --seeds 0,1,2,3,4 --n-jobs 5
-uv run python run_experiment.py --phase C_early_d3 --seeds 0,1,2,3,4 --n-jobs 5
-uv run python run_experiment.py --phase C_early_d3_native --seeds 0,1,2,3,4 --n-jobs 5
+# Calibrate a monitor's Page-Hinkley to the reference fire count (offline sweep
+# over a cached score series — one run, then any threshold replays for free).
 uv run python scripts/calibrate_monitor.py C_early_hdddm --reference C_early
+
+# The collapse outcome is bimodal: run these to 20 seeds, not 5.
+make run-comparators
 uv run python scripts/comparator_analysis.py
 ```

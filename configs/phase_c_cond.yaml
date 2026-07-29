@@ -1,8 +1,0 @@
-phase: C_cond
-gan_lr: 0.001
-cgan_n_critic: 5
-cgan_gp_lambda: 10.0
-cgan_spectral_norm: true
-cgan_loss: wgan_gp
-cgan_feature_matching: false
-cgan_label_smoothing: 0.0

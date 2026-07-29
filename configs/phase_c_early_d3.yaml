@@ -17,4 +17,3 @@ recon_pht_delta: 0.0005
 recon_pht_threshold: 0.32
 recon_pht_min_instances: 10
 lead_horizon: 20000
-early_augment: false

@@ -1,7 +1,7 @@
 [project]
 name = "driftgan"
 version = "0.2.0"
-description = "Reproducible concept-drift adaptation experiments on CICIDS2017: HAT + PHT baselines vs GAN-based early augmentation"
+description = "PACE: proactive adaptation via covariate-shift estimation for streaming intrusion detection"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [

@@ -56,8 +56,6 @@ def base_config(synthetic_csv, tmp_path_factory):
             log_interval=100_000,
             train_window=500,
             buffer_size=200,
-            gan_epochs=2,
-            n_synthetic=50,
             device="cpu",
             recovery_theta=0.5,
             recovery_k=2,
@@ -73,17 +71,6 @@ def base_config(synthetic_csv, tmp_path_factory):
     return make
 
 
-def test_phase_a_frozen_never_adapts(base_config):
-    result = run_phase(base_config("A"), seed=0)
-    assert result.n_processed == N_ROWS
-    assert result.drift_indices == []
-    run_dir = base_config("A").run_dir(0)
-    assert (run_dir / "manifest.json").exists()
-    assert (run_dir / "snapshots.parquet").exists()
-    assert (run_dir / "trace.csv.gz").exists()
-    assert (run_dir / "cost.json").exists()
-
-
 def test_phase_b_detects_the_shift(base_config):
     result = run_phase(base_config("B"), seed=0)
     assert len(result.drift_indices) >= 1
@@ -91,24 +78,24 @@ def test_phase_b_detects_the_shift(base_config):
     assert result.drift_indices[0] >= ATTACK_START
     # Reactive model should end with usable F1 on this easy stream.
     assert result.final_f1 > 0.5
+    run_dir = base_config("B").run_dir(0)
+    for artifact in ("manifest.json", "snapshots.parquet", "trace.csv.gz", "cost.json"):
+        assert (run_dir / artifact).exists(), artifact
 
 
 def test_scheduled_phases_share_drift_indices(base_config, tmp_path):
+    """Scheduled arms replay identical adaptation indices, so events pair up."""
     schedule = DriftSchedule(indices=[3_200], source="labels")
     schedule_path = tmp_path / "sched.json"
     schedule.save(schedule_path)
 
     results = {}
-    for phase in ("B", "C", "C_prime"):
+    for phase in ("B", "ARF_sched", "SRP_sched"):
         config = base_config(phase, drift_schedule=str(schedule_path))
         results[phase] = run_phase(config, seed=0)
 
     for phase, result in results.items():
         assert result.drift_indices == [3_200], phase
-
-    # Augmenting phases must have generated synthetic samples at the event.
-    assert results["C"].drift_events[0]["n_synthetic"] > 0
-    assert results["C_prime"].drift_events[0]["n_synthetic"] == results["C"].drift_events[0]["n_synthetic"]
 
     # Recovery parquet written for each phase.
     results_dir = base_config("B").results_dir
@@ -118,9 +105,12 @@ def test_scheduled_phases_share_drift_indices(base_config, tmp_path):
         ).exists()
 
 
-def test_phase_c_cond_runs(base_config):
-    result = run_phase(base_config("C_cond", gan_epochs=1, cgan_n_critic=1), seed=0)
-    assert result.n_processed == N_ROWS
+def test_frequency_control_fires_on_a_blind_clock(base_config):
+    """`*_freq` adapts on the periodic clock alone — no drift signal involved."""
+    config = base_config("C_freq", periodic_adapt_interval=1_000)
+    result = run_phase(config, seed=0)
+    assert len(result.drift_indices) >= 2
+    assert {e["source"] for e in result.drift_events} == {"periodic"}
 
 
 def test_phase_c_early_produces_lead_report(base_config):

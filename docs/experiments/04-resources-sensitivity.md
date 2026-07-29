@@ -20,10 +20,10 @@ and where does the compute go?
   the ensembles are far heavier — ARF ~1.0K/s, and **SRP ~130/s** (its p95 latency
   is ~11 ms/sample vs sub-ms for HAT). C_early ~7.2K/s.
 - **Latency tail**: per-sample latency is **sub-millisecond typically** (p50
-  ~0.08 ms, p99 ~1 ms), but the GAN/AE **training bursts spike the max to ~1 s** —
+  ~0.08 ms, p99 ~1 ms), but the monitor's periodic refit **spikes the max to ~1 s** —
   the relevant number for a line-rate IDS, and worth stating openly.
-- **Where the time goes**: for the augmenter phases, GAN training dominates
-  (C_cond is largest); C_early spends a visible slice in the AE monitor; the HAT
+- **Where the time goes**: the proactive arm spends a visible slice in the shift
+  monitor; the HAT
   update/inference is the rest.
 
 ### Interpretation

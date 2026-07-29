@@ -16,27 +16,25 @@ CONFIGS_DIR = REPO_ROOT / "configs"
 RESULTS_DIR = REPO_ROOT / "results"
 
 VALID_PHASES = (
-    "A", "B", "C", "C_prime", "C_cond", "C_early", "C_freq",
-    # SOTA baselines (Experiment #3): alternative drift detectors driving the
-    # reactive HAT, and self-adapting streaming ensembles.
-    "B_adwin", "B_kswin", "ARF", "SRP",
-    # Budget-matched SOTA (Experiment #3b): ARF/SRP adapting only in triggered
-    # train windows on the shared schedule (same label budget as B).
+    # Reactive baselines: adaptation triggered by the classification error.
+    "B", "B_adwin", "B_kswin",
+    # Streaming ensembles learning from every sample (upper reference).
+    "ARF", "SRP",
+    # Budget-matched controls: the same learners adapting only inside triggered
+    # windows on the shared schedule, i.e. at the reactive arm's label budget.
     "ARF_sched", "SRP_sched",
-    # C_early's proactive early-detection trigger on a SOTA ensemble base learner
-    # (Experiment #3c): does anticipation help the strongest model, or only HAT?
-    "ARF_early", "SRP_early",
-    # Frequency-matched controls for the ensembles (Tier 1): ARF/SRP adapting on
-    # a blind periodic clock whose count matches *_early, isolating adaptation
-    # *frequency* from *timing* on the external datasets (generalizes C_freq).
-    "ARF_freq", "SRP_freq",
-    # Monitor ablations of C_early (Experiment #2): cheap shift monitors.
+    # PACE: the proactive covariate-shift trigger, on each base learner.
+    "C_early", "ARF_early", "SRP_early",
+    # Frequency-matched controls: a blind periodic clock whose fire count
+    # matches the matching *_early arm, isolating timing from frequency.
+    "C_freq", "ARF_freq", "SRP_freq",
+    # Monitor ablation: cheaper shift statistics behind the same policy.
     "C_early_mean", "C_early_pca", "C_early_ks", "C_early_mmd",
-    # Published unsupervised drift detectors as external comparators for the
-    # monitor, at the identical protocol: D3 (Gozuacik et al. CIKM 2019) and
-    # HDDDM (Ditzler & Polikar, CIDUE 2011). "C_early_d3_native" additionally
-    # restores D3's own sliding window and AUC threshold, so the comparison no
-    # longer depends on our window bookkeeping.
+    # Published unsupervised detectors as external comparators, at the identical
+    # protocol: D3 (Gozuacik et al., CIKM 2019) and HDDDM (Ditzler & Polikar,
+    # CIDUE 2011). The "d3_native"/"d3_sized" arms additionally restore D3's own
+    # sliding window and AUC threshold, so the comparison does not depend on our
+    # window bookkeeping.
     "C_early_d3", "C_early_d3_native", "C_early_d3_sized", "C_early_hdddm",
 )
 
@@ -70,33 +68,18 @@ class ExperimentConfig:
     pht_delta: float = 0.002
     train_window: int = 5_000
     drift_schedule: str | None = None  # path to drift_schedule.json; overrides dynamic PHT
-    # Frequency-matched control (C_freq): adapt every N samples on a blind
+    # Frequency-matched controls (`*_freq`): adapt every N samples on a blind
     # periodic clock instead of any drift signal. N is set so the total number
-    # of adaptations matches C_early's mean fire count, isolating adaptation
-    # *frequency* from adaptation *timing* (anticipation).
+    # of adaptations matches the matching `*_early` arm's fire count, isolating
+    # adaptation *frequency* from adaptation *timing* (anticipation).
     periodic_adapt_interval: int = 12_000
 
-    # Augmentation (C, C_prime, C_cond)
-    buffer_size: int = 500
-    min_attack_samples: int = 5
-    n_synthetic: int = 200
-    gan_noise_dim: int = 16
-    gan_epochs: int = 30
-    gan_lr: float = 0.005
-    jitter_sigma_scale: float = 0.01  # sigma = scale * std(feature)
+    buffer_size: int = 500  # recent-sample window kept for diagnostics
     device: str = "cuda"  # falls back to cpu automatically if unavailable
 
-    # cGAN (C_cond)
-    cgan_n_critic: int = 5
-    cgan_gp_lambda: float = 10.0
-    cgan_spectral_norm: bool = True
-    cgan_feature_matching: bool = False
-    cgan_label_smoothing: float = 0.0  # only used by the BCE ablation variant
-    cgan_loss: str = "wgan_gp"  # "wgan_gp" | "bce" (ablation)
-
-    # Early detection (C_early)
-    # "ae" | "pca" | "ks" | "mmd" | "mean" (ablation, #2)
-    # | "hdddm" | "d3" | "d3_native"      (published comparators, #7)
+    # The unsupervised covariate-shift monitor (PACE)
+    # "ae" | "pca" | "ks" | "mmd" | "mean" (ablation)
+    # | "hdddm" | "d3" | "d3_native"      (published comparators)
     monitor_type: str = "ae"
     monitor_interval: int = 1_000  # recon-error sample cadence (finer -> more PHT updates)
     monitor_epochs: int = 5
@@ -107,7 +90,6 @@ class ExperimentConfig:
     recon_pht_threshold: float = 2.0  # cumulative-sum threshold for PHT_recon
     recon_pht_min_instances: int = 10  # warmup checks before PHT_recon can fire
     lead_horizon: int = 20_000  # max samples between PHT_recon and PHT_class fires to pair them
-    early_augment: bool = False  # if True, C_early also augments like C on early fires
 
     # Native D3 comparator (monitor_type "d3_native"): the published algorithm's
     # own hyperparameters, defaults as released by Gozuacik et al. (CIKM 2019).

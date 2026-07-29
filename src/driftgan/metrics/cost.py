@@ -32,7 +32,7 @@ class CostTracker:
     ``rss_sample_interval`` samples via psutil.
     """
 
-    SECTIONS = ("hat_inference", "hat_update", "gan_training", "gan_generation", "monitor")
+    SECTIONS = ("hat_inference", "hat_update", "monitor")
 
     def __init__(self, rss_sample_interval: int = 5_000):
         self._latencies_ms: list[float] = []

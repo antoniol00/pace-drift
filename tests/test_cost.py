@@ -11,13 +11,13 @@ def test_latency_and_sections_accounting():
         with tracker.sample():
             with tracker.section("hat_inference"):
                 time.sleep(0.001)
-            with tracker.section("gan_training"):
+            with tracker.section("monitor"):
                 time.sleep(0.002)
     s = tracker.summary()
     assert s["n_samples"] == 4
     assert s["latency_p50_ms"] >= 3.0
     assert s["latency_max_ms"] >= s["latency_p50_ms"]
-    assert s["time_gan_training_s"] > s["time_hat_inference_s"] > 0
+    assert s["time_monitor_s"] > s["time_hat_inference_s"] > 0
     assert s["time_other_s"] >= 0
     assert s["peak_rss_mb"] > 0
 

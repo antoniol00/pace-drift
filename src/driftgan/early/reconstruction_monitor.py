@@ -21,8 +21,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 
-from driftgan.augment.base import FeatureScaler
-from driftgan.augment.vanilla_gan import resolve_device
+from driftgan.early.scaling import FeatureScaler, resolve_device
 
 
 class ReconstructionMonitor:

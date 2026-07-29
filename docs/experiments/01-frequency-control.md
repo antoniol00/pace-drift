@@ -1,28 +1,28 @@
-# Experiment 1 — Frequency-matched control (C_freq)
+# Experiment 1 — Frequency-matched control
 
 ## Question
 
-C_early beats the reactive baseline B. But C_early adapts on a schedule of its
-own choosing — is its gain because of ***when*** it adapts (informed by the drift
-signal) or simply because it adapts a **different number of times**? A reviewer's
-first objection: *"it only helps because it retrains more often."*
+PACE beats the reactive baseline. But it adapts on a schedule of its own
+choosing, so the first objection is obvious: *is the gain because of **when** it
+adapts, or simply because it adapts a **different number of times**?*
 
 ## Setup
 
-Phase **C_freq**: adapt on a **blind periodic clock** — fire every 12,000 samples
-regardless of any error or drift signal — at the *same count* as C_early (~162
-adaptations over the evaluated stream). Same HAT, same retrain-window mechanics,
-no monitor. This isolates adaptation **frequency** from adaptation **timing**.
-`make run-C-freq SEEDS=0,1,2,3,4`.
+Phase **`C_freq`**: adapt on a **blind periodic clock** — fire every 12,000
+samples regardless of any error or drift signal — at the *same count* as PACE
+(~162 adaptations over the evaluated stream). Same base learner, same
+training-window mechanics, no monitor. This isolates adaptation **frequency**
+from adaptation **timing**. `make run-freq`.
 
-A useful fact surfaced first: B actually fires **more** than C_early (233 vs
-142–171), so "it retrains more" was already weak — but C_freq tests it cleanly.
+One fact weakens the objection before the control is even run: the reactive
+baseline already fires **more** than PACE (233 vs 169), so "it retrains more"
+was never the explanation. `C_freq` settles it cleanly.
 
 ## Results
 
-Overall local F1 by stream segment (mean over 5 seeds):
+Overall local F1 by stream segment:
 
-| Segment | B (reactive) | C_freq (blind, same count) | C_early (proactive) |
+| Segment | reactive | blind clock (same count) | PACE |
 |---|---|---|---|
 | 0.5–1.0M (easy) | 0.908 | 0.780 | 0.891 |
 | 1.0–1.5M (drift-dense) | 0.346 | 0.187 | 0.489 |
@@ -33,19 +33,25 @@ Overall local F1 by stream segment (mean over 5 seeds):
 
 ## Interpretation
 
-**Timing, not frequency.** Matching C_early's adaptation *count* with blind
-periodic timing not only fails to reproduce its advantage — it lands **below the
-reactive baseline B** (0.433 vs 0.573), collapsing in exactly the drift-dense
-regions where C_early shines. So C_early's gain is entirely about adapting at the
-*right moments* (informed by the drift/anticipation signal), not about adapting
-more.
+**Timing, not frequency.** Matching PACE's adaptation *count* with blind periodic
+timing does not merely fail to reproduce its advantage — it lands **below the
+reactive baseline** (0.433 vs 0.573), collapsing in exactly the drift-dense
+regions where PACE gains. The advantage is therefore about adapting at the right
+moments, not about adapting more.
 
-The mechanism is intuitive: a blind clock often opens its retrain window over a
-benign or wrong-attack stretch, biasing the tree toward the wrong distribution;
-the drift-triggered window lands on the samples that matter.
+The mechanism is intuitive, and [experiment 7](07-unsupervised-comparator.md)
+measures it directly: a blind clock often opens its training window over a benign
+or wrong-attack stretch, biasing the learner toward a distribution that is not
+the one it will be tested on. An informed window lands on the samples that
+matter.
+
+The same comparison holds on a **controlled synthetic stream** whose drift
+structure is known by construction, which rules out any explanation resting on a
+peculiarity of this capture — see [experiment 8](08-synthetic-timing.md).
 
 ## Caveats
 
-- C_freq's *final-window* F1 is unstable (0.19 mean, one seed 0.95) — this is why
-  the analysis uses overall/segment local F1, not the last window.
-- The count match is to C_early's mean (~162); per-seed counts vary slightly.
+- The blind clock's *final-window* F1 is unstable (0.19 mean, one seed 0.95).
+  This is exactly why the analysis uses overall and per-segment local F1 rather
+  than the last window.
+- The count match is to PACE's mean; per-seed counts vary slightly.
