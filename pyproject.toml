@@ -6,7 +6,7 @@ readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "river>=0.23,<0.24",
-    "torch>=2.7,<2.9",
+    "torch>=2.13.0,<2.14",
     "numpy>=2.0",
     "matplotlib>=3.10",
     "pandas>=2.2",
