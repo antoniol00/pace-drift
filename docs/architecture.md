@@ -108,6 +108,7 @@ One YAML per phase (`configs/phase_*.yaml`), merged over `configs/base.yaml`.
 | PACE | `C_early`, `ARF_early`, `SRP_early` | HAT / ensemble | dual recon+class PHT | the proposal, on each base learner |
 | Frequency controls | `C_freq`, `ARF_freq`, `SRP_freq` | HAT / ensemble | blind periodic clock | isolates timing from frequency |
 | Budget-matched SOTA | `ARF_sched`, `SRP_sched` | ensemble | shared schedule | isolates model capacity from supervision |
+| Live reactive controls | `B_pht`, `ARF_pht`, `SRP_pht` | HAT / ensemble | error PHT live on own predictions | isolates the monitor from the error test |
 | Continuous SOTA | `ARF`, `SRP` | ensemble | continuous | upper reference |
 | Monitor ablation | `C_early_pca`, `C_early_mean`, `C_early_ks`, `C_early_mmd` | HAT | dual, cheap monitor | how cheap can the signal be |
 | Published comparators | `C_early_hdddm`, `C_early_d3`, `C_early_d3_native`, `C_early_d3_sized` | HAT | dual / native | do published detectors trigger as well |

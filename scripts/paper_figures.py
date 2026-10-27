@@ -630,8 +630,15 @@ def fig12_forest() -> None:
 # --------------------------------------------------------------------------- #
 # Figure 13 — timing vs frequency at matched count
 # --------------------------------------------------------------------------- #
-CELLS13 = [("cicids2018", "ARF"), ("cicids2018", "SRP"), ("unsw", "ARF"), ("unsw", "SRP")]
+CELLS13 = [(ds, learner) for ds in DSET for learner in ("HAT", "ARF", "SRP")]
 ARMS13 = [("sched", "B", "Reactive"), ("freq", "C_freq", "Blind clock"), ("early", "C_early", "PACE")]
+
+
+def _phases13(learner: str) -> list[str]:
+    """Reactive, blind clock and PACE phase names for one learner."""
+    if learner == "HAT":
+        return ["B", "C_freq", "C_early"]
+    return [f"{learner}_{a}" for a, _, _ in ARMS13]
 
 
 def two_level_ticks(ax, cells) -> None:
@@ -640,14 +647,15 @@ def two_level_ticks(ax, cells) -> None:
     names = list(dict.fromkeys(ds for ds, _ in cells))
     centres = [np.mean([i for i, (ds, _) in enumerate(cells) if ds == n]) for n in names]
     ax.set_xticks(centres, [DSET[n] for n in names], minor=True)
+    ax.xaxis.remove_overlapping_locs = False  # an odd group's centre sits on a major tick
     ax.tick_params(axis="x", which="minor", length=0, pad=15)
 
 
 def fig13_timing_vs_frequency(labels: bool = False) -> None:
-    """ARF/SRP on CIC-IDS2018 and UNSW-NB15: reactive, blind clock at PACE's count, PACE."""
+    """All nine cells: reactive, blind clock at PACE's count, PACE."""
     vals = {}
     for ds, learner in CELLS13:
-        phases = [f"{learner}_{a}" for a, _, _ in ARMS13]
+        phases = _phases13(learner)
         seeds = _shared_seeds(ds, *phases)
         vals[(ds, learner)] = [_per_seed_local_f1(ds, p, seeds) for p in phases]
     fig, ax = plt.subplots(figsize=(COL, 2.1))
@@ -673,12 +681,12 @@ def fig13_forest() -> None:
     """Variant: the frequency and timing components with paired 95% CIs."""
     from tier1_analysis import paired_ci
 
-    fig, ax = plt.subplots(figsize=(COL, 1.9))
+    fig, ax = plt.subplots(figsize=(COL, 2.8))
     comp = [("Frequency (clock $-$ reactive)", 1, 0, "s", SLATE_LT, -0.14),
             ("Timing (PACE $-$ clock)", 2, 1, "o", ACC, 0.14)]
     for name, a, b, mk, col, dy in comp:
         for i, (ds, learner) in enumerate(CELLS13):
-            phases = [f"{learner}_{x}" for x, _, _ in ARMS13]
+            phases = _phases13(learner)
             f = [_per_seed_local_f1(ds, p, _shared_seeds(ds, *phases)) for p in phases]
             d = f[a] - f[b]
             lo, hi = paired_ci(d)

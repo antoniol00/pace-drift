@@ -26,10 +26,11 @@ Two further views answer the confounds a fire count hides:
   labels  the share of the evaluated stream each arm learns from. A firing opens
           a train_window and a firing inside an open window restarts it, so
           clustered firings cost fewer labels than their count suggests.
-  live    *_sched replays a schedule recorded from a live HAT pass, while the
-          error test inside *_early watches the ensemble's own error. ``*_pht``
-          runs that error test live with no monitor, so early - pht isolates
-          the monitor. Fires of every *_early arm are split by source.
+  live    sched replays a schedule recorded from one live HAT pass at seed 0,
+          while the error test inside *_early watches the learner's own error
+          at every seed. ``*_pht`` runs that error test live with no monitor,
+          so early - pht isolates the monitor. Fires of every *_early arm are
+          split by source.
 
 Run:  uv run python scripts/tier1_analysis.py
 """
@@ -56,7 +57,7 @@ CELLS = [
     (ds, learner, *arms)
     for ds in ("cicids2017", "cicids2018", "unsw")
     for learner, arms in (
-        ("HAT", ("B", "C_freq", "C_early", None)),  # B's schedule is HAT's own live PHT
+        ("HAT", ("B", "C_freq", "C_early", "B_pht")),
         ("ARF", ("ARF_sched", "ARF_freq", "ARF_early", "ARF_pht")),
         ("SRP", ("SRP_sched", "SRP_freq", "SRP_early", "SRP_pht")),
     )
@@ -162,13 +163,13 @@ def aggregate(name: str, cell_means: np.ndarray) -> str:
 
 
 def live_control_section() -> list[str]:
-    """early vs the live error-only test on the ensemble's own predictions."""
+    """early vs the live error-only test on the learner's own predictions."""
     lines = [
         "",
-        "## Live reactive control for the ensembles",
+        "## Live reactive control",
         "",
-        "`*_pht` runs the error Page-Hinkley live on the ensemble's own predictions "
-        "with no monitor; `*_sched` replays the HAT-derived schedule. "
+        "`*_pht` runs the error Page-Hinkley live on the learner's own predictions "
+        "with no monitor; `sched` replays the schedule recorded from HAT at seed 0. "
         "`Δ monitor = early − pht` isolates what the monitor adds to the same live "
         "error test; `labels` is the share of the evaluated stream learned from.",
         "",
@@ -177,9 +178,8 @@ def live_control_section() -> list[str]:
         "|---|---|---:|---|---|---|---|---|",
     ]
     pending = []
+    cell_means: dict[str, list[float]] = {"live (pht−sched)": [], "monitor (early−pht)": []}
     for ds, learner, r, _fq, e, live in CELLS:
-        if live is None:
-            continue
         seeds = cell_seeds(ds, r, live, e)
         f1 = [per_seed_local_f1(ds, p, seeds) for p in (r, live, e)]
         nd = [per_seed_n_drifts(ds, p, seeds) for p in (r, live, e)]
@@ -194,8 +194,13 @@ def live_control_section() -> list[str]:
             + "/".join(f"{100 * x:.1f}%" for x in lab) + " | "
             f"{f1r.mean():.3f}/{f1l.mean():.3f}/{f1e.mean():.3f} | "
             f"{ci_str(f1l - f1r)} | {ci_str(f1e - f1l)} |")
+        cell_means["live (pht−sched)"].append(float((f1l - f1r).mean()))
+        cell_means["monitor (early−pht)"].append(float((f1e - f1l).mean()))
     if pending:
         lines += ["", f"> Pending (runs not complete): {', '.join(pending)}."]
+    else:
+        lines += ["", f"**Aggregate over the {len(CELLS)} cells:**"]
+        lines += [aggregate(f"Δ {k}", np.array(v)) for k, v in cell_means.items()]
     return lines
 
 

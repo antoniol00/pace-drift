@@ -44,9 +44,9 @@ from *frequency*, and against budget-matched ensembles, which separates it from
 *model capacity*. This is the part the applied drift-in-NIDS literature routinely
 omits, and it is what makes the claim falsifiable.
 
-**3. Model-agnostic transfer at a fixed budget.** The same trigger improves a
-Hoeffding Adaptive Tree, an Adaptive Random Forest and Streaming Random Patches,
-across three datasets, with adaptation confined to triggered windows.
+**3. Controls that also bound our own claim.** A live reactive control runs the
+error test PACE uses alongside its monitor, on each learner's own predictions and
+with no monitor. It is the control that narrowed the result (below).
 
 **4. Closed-loop stability as the criterion for trigger quality.** Trigger quality
 has to be measured by what the trigger does to the *loop*, not by how well it
@@ -55,13 +55,24 @@ this project (below).
 
 ## What the evidence says
 
-**The trigger works, and it is timing.** Sustained detection quality improves in
-all nine (dataset × base-learner) cells; aggregated over cells, **+0.043
-[95% CI +0.021, +0.065]**, with the CI excluding 0 in 7 of 9 cells — every
-ensemble cell. A blind clock firing the same number of times does not merely fail
-to reproduce this: it lands *below* the reactive baseline. The same holds on a
+**Against the replayed schedule the trigger works, and it is timing.** Sustained
+detection quality improves in all nine (dataset × base-learner) cells;
+aggregated over cells, **+0.043 [95% CI +0.021, +0.065]**, with the CI excluding
+0 in 7 of 9 cells. A blind clock firing the same number of times does not
+reproduce it: over the nine cells the timing component is **+0.042
+[+0.008, +0.077]** and the frequency component +0.001. The same holds on a
 generated stream whose drift structure is known by construction, at an exactly
 matched budget (**+0.213 [+0.188, +0.238]**).
+
+**But the informing is mostly the live error test, not the monitor.** The
+reactive arms replay a schedule recorded once from HAT at seed 0. Run live on
+each learner's own predictions with no monitor, the error test alone matches
+PACE in five of six cells on CIC-IDS2017/2018 with a third to a half of the
+labels; the monitor's own contribution is **+0.021 [−0.002, +0.045] — not
+resolved**. It is significant only on the UNSW ensembles, where it adds firings
+and a blind clock at the same count does as well. The anticipation is real (the
+monitor fires first), but under immediate labels it does not translate into
+measurably better adaptation; label delay is where that should be tested.
 
 **Honestly, timing is not the whole story everywhere.** On UNSW-NB15 the benefit
 is adaptation *frequency*, not timing. This is reported as an empirical
@@ -91,6 +102,8 @@ exposes, not a ranking that favours us.
 ## What we do not claim
 
 - ❌ A novel drift detector. The signal family is prior art, and we cite it.
+- ❌ That the covariate-shift monitor places adaptation better than an error test
+  run live on the learner. Against that control its contribution is not resolved.
 - ❌ That our monitor is more stable than published unsupervised detectors.
 - ❌ A mechanism explaining why timing dominates on some datasets and frequency on
   others. It is an observation, reported as one.
@@ -99,7 +112,8 @@ exposes, not a ranking that favours us.
 
 ## In one sentence
 
-We propose **when** to adapt a streaming intrusion detector — guided by unlabelled
-traffic rather than by delayed error — establish it with controls that rule out
-the easy alternative explanations, and show that choosing that trigger badly does
-not merely fail to help: it poisons the model.
+We treat **when** to adapt a streaming intrusion detector as a policy, show with
+controls that informed placement beats blind placement — while being unable to
+show that an unlabelled covariate-shift signal informs it better than a live
+error test does — and show that choosing that trigger badly does not merely fail
+to help: it poisons the model.

@@ -2,16 +2,16 @@
 
 **PACE** — *Proactive Adaptation via Covariate-shift Estimation*.
 
-**Abstract.** Streaming intrusion detectors degrade as attack traffic drifts away from the distribution they were trained on, and the standard remedy — retraining once classification error rises — inherits the delay of labelled feedback. This project treats **when to adapt** as a design decision in its own right. PACE is an unsupervised trigger: a monitor watches the reconstruction error of *incoming traffic* and initiates adaptation before the error signal responds, with learning confined to short triggered windows instead of continuous supervision. The claim is validated prequentially on three intrusion-detection datasets (CICIDS2017, CIC-IDS2018, UNSW-NB15) × three streaming learners (HAT, ARF, SRP), 10 seeds each, under **budget-matched controls** that separate adaptation *timing* from adaptation *frequency* and from *model capacity*. PACE improves sustained detection quality in all nine cells, and a frequency-matched blind clock isolates timing as the cause on CICIDS2017/2018. A final experiment argues that trigger quality must be judged by **closed-loop stability** rather than detection accuracy, and reports an uncomfortable finding in that frame: at matched fire count over 20 seeds, *every* trigger tested — ours, two published unsupervised detectors and two cheap statistics — intermittently drives the learner into a catastrophic false-positive regime, through a training-distribution mechanism that detection metrics and final-window F1 both conceal. See [Results](#8-results).
+**Abstract.** Streaming intrusion detectors degrade as attack traffic drifts away from the distribution they were trained on, and the standard remedy — retraining once classification error rises — inherits the delay of labelled feedback. This project treats **when to adapt** as a design decision in its own right. PACE is an unsupervised trigger: a monitor watches the reconstruction error of *incoming traffic* and initiates adaptation before the error signal responds, with learning confined to short triggered windows instead of continuous supervision. The claim is validated prequentially on three intrusion-detection datasets (CICIDS2017, CIC-IDS2018, UNSW-NB15) × three streaming learners (HAT, ARF, SRP), 10 seeds each, under **budget-matched controls** that separate adaptation *timing* from adaptation *frequency* and from *model capacity*. Against a replayed reactive schedule PACE improves sustained detection quality in all nine cells, and a frequency-matched blind clock isolates timing as the cause on CICIDS2017/2018 — but a live reactive control, the same error test run on each learner's own predictions, matches PACE there with fewer labels, so the monitor's own contribution is not resolved. A final experiment argues that trigger quality must be judged by **closed-loop stability** rather than detection accuracy, and reports an uncomfortable finding in that frame: at matched fire count over 20 seeds, *every* trigger tested — ours, two published unsupervised detectors and two cheap statistics — intermittently drives the learner into a catastrophic false-positive regime, through a training-distribution mechanism that detection metrics and final-window F1 both conceal. See [Results](#8-results).
 
 
 ## Key results at a glance
 
-- **The proactive trigger works, and it is not a crutch for a weak model** — swapping a reactive (error-based) trigger for the unsupervised covariate-shift trigger improves sustained local F1 in **all 9 (dataset × base-learner) cells** over 10 seeds each; aggregated, **+0.043 [95% CI +0.021, +0.065]** (sign test p=0.0039). The paired CI excludes 0 in **7/9 cells — every ensemble cell**, five of them with 10/10 seeds agreeing (Wilcoxon p=0.002); the two exceptions are the high-variance HAT cells. It holds under imbalance-aware κ in all nine.
-- **It is timing, not just frequency** — against a blind periodic clock firing the *same number of times*, informed placement gains **+0.038 (ARF) / +0.048 (SRP)** on CIC-IDS2018, where adapting more on a blind schedule actively *hurts* (0.881 vs the sparser reactive 0.925). A controlled synthetic stream, whose drift structure is known by construction, reproduces the advantage at an exactly matched budget (**+0.213 [+0.188, +0.238]**).
-- **Honest scope** — on UNSW-NB15 the benefit is adaptation *frequency*, not timing (ARF +0.010, SRP −0.001). The per-dataset split is reported as an empirical observation across three captures; no mechanism linking it to drift structure is claimed.
+- **Against the replayed reactive schedule the proactive trigger wins everywhere** — swapping the shared reactive schedule (recorded once from HAT at seed 0) for the unsupervised covariate-shift trigger improves sustained local F1 in **all 9 (dataset × base-learner) cells** over 10 seeds each; aggregated, **+0.043 [95% CI +0.021, +0.065]** (sign test p=0.0039). The paired CI excludes 0 in **7/9 cells — every ensemble cell**, five of them with 10/10 seeds agreeing (Wilcoxon p=0.002); the two exceptions are the high-variance HAT cells. It holds under imbalance-aware κ in all nine.
+- **It is timing, not just frequency** — against a blind periodic clock firing the *same number of times* in every cell, the timing component carries the aggregate (**+0.042 [+0.008, +0.077]** vs +0.001 for frequency), positive with a CI excluding 0 in 7/9 cells; on CIC-IDS2018 adapting more on a blind schedule actively *hurts* (0.881 vs the sparser reactive 0.924). A controlled synthetic stream, whose drift structure is known by construction, reproduces the advantage at an exactly matched budget (**+0.213 [+0.188, +0.238]**).
+- **But the timing comes mostly from the live error test, not the monitor** — run live on each learner's own predictions with no monitor (`B_pht` / `ARF_pht` / `SRP_pht`), the error test PACE runs alongside its monitor matches PACE in 5 of 6 cells on CIC-IDS2017/2018 with a third to a half of the labels. The monitor's own contribution is **+0.021 [−0.002, +0.045] — not resolved**; it is significant only on the UNSW ensembles, where it adds firings and a blind clock at the same count does as well. On UNSW-NB15 the benefit is adaptation *frequency*, not timing; no mechanism for the per-dataset split is claimed.
 - **The adaptation loop is fragile, and detection metrics do not show it** — at matched fire count over 20 seeds, *every* trigger tested drives the learner into a degenerate regime on a fifth to three-fifths of runs: autoencoder **4/20**, HDDDM 5/20, PCA 6/20, D3 (CIKM'19) 10/20, mean-shift 12/20. Badly placed windows feed it up to **0.46 attack fraction against a 0.20 base rate**, skewing its prior until the false-positive rate reaches **0.60–0.70**. Our monitor is *not* measurably more stable than the published detectors — only the trivial mean-shift floor separates (p=0.022).
-- **Model capacity beats supervision volume** — budget-matched to ~233 sparse adaptations, ensembles lead a single tree by ~+0.15 sustained F1, while continuous supervision (~2M updates) adds only ~0.05–0.08 on top. The practical recipe is **ensemble + proactive triggered adaptation**.
+- **Model capacity beats supervision volume** — budget-matched to ~233 sparse adaptations, ensembles lead a single tree by ~+0.15 sustained F1, while continuous supervision (~2M updates) adds only ~0.05–0.08 on top. The practical recipe is **ensemble + gated adaptation on a live error test**.
 - **Sub-millisecond cost** — the monitor is a linear-algebra pass on a small buffer; p95 latency stays under 0.5 ms/sample.
 
 ![Timing vs frequency at matched adaptation count](docs/figures/fig13_timing_vs_frequency.png)
@@ -27,7 +27,7 @@ That makes **when to adapt** the interesting lever. A signal computed from *unla
 ## 2. Contributions
 
 1. **An unsupervised *when-to-adapt* policy** — a reconstruction-error monitor over incoming traffic feeding a dual (recon + class) Page-Hinkley trigger, with learning gated to triggered windows. (`src/driftgan/early/`)
-2. **Controls that isolate the mechanism** — a frequency-matched blind clock at identical fire count separates *timing* from *frequency* (`C_freq`, `ARF_freq`, `SRP_freq`); budget-matched ensembles separate *model capacity* from *continuous supervision* (`ARF_sched`, `SRP_sched`).
+2. **Controls that isolate the mechanism** — a frequency-matched blind clock at identical fire count separates *timing* from *frequency* (`C_freq`, `ARF_freq`, `SRP_freq`); budget-matched ensembles separate *model capacity* from *continuous supervision* (`ARF_sched`, `SRP_sched`); a live reactive control separates the monitor from the error test it runs alongside (`B_pht`, `ARF_pht`, `SRP_pht`).
 3. **Closed-loop stability as the criterion for trigger quality** — monitors compared by what they do to the learner (collapse rate, false-positive regime, the label composition of triggered windows), not by detection metrics. (`scripts/comparator_analysis.py`)
 4. **Two published unsupervised detectors as external comparators** — D3 (Gözüaçık et al., CIKM 2019) and HDDDM (Ditzler & Polikar, CIDUE 2011), implemented and run at the identical protocol and matched fire count, plus D3 with its own native window and threshold. (`early/shift_monitors.py`)
 5. **Cross-dataset validation** — the base-learner × trigger 2×2 replicated on CIC-IDS2018 and UNSW-NB15, with dataset selection driven by a label-ordering diagnostic. (`scripts/scan_drift_window.py`)
@@ -75,6 +75,7 @@ flowchart LR
 | B / `*_sched` | HAT / ARF / SRP | PHT / shared schedule | reactive baseline (error-driven) |
 | `C_early` / `ARF_early` / `SRP_early` | HAT / ARF / SRP | dual PHT (recon + class) | **the proactive policy** |
 | `C_freq` / `ARF_freq` / `SRP_freq` | HAT / ARF / SRP | blind periodic clock, matched count | adaptation *timing* vs *frequency* |
+| `B_pht` / `ARF_pht` / `SRP_pht` | HAT / ARF / SRP | PHT live on the learner's own error | the monitor vs a live reactive trigger |
 | `ARF` / `SRP` | ensemble | none (continuous learning) | upper bound at full supervision |
 | `C_early_pca` / `_mean` / `_hdddm` / `_d3` | HAT | dual PHT, monitor swapped | which shift signal makes a good trigger |
 | `B_adwin` / `B_kswin` | HAT | ADWIN / KSWIN | drift-detector choice |
@@ -145,20 +146,27 @@ Overall local F1, reactive → proactive, 10 seeds ([experiment 5](docs/experime
 | ARF | 0.717 → 0.747 (+0.030) | 0.913 → 0.926 (+0.012) | 0.603 → 0.662 (+0.059) |
 | SRP | 0.737 → **0.768** (+0.032) | 0.924 → 0.929 (+0.005) | 0.697 → **0.745** (+0.048) |
 
-Positive in all 9 cells. Under paired CIs over 10 seeds ([experiment 6](docs/experiments/06-timing-vs-frequency.md)) the CI excludes 0 in **7/9 cells — every ensemble cell** — and the two exceptions are the high-variance HAT ones. Aggregated over cells: **+0.043 [+0.021, +0.065]**. Prequential Kappa-M and Kappa-Temporal are positive in all nine.
+Positive in all 9 cells against the replayed schedule, at a labelled share of 21–29% vs 25.5% on CICIDS2017 but 32–33% vs 8.9% on CIC-IDS2018 and 43–50% vs 32.4% on UNSW-NB15. Under paired CIs over 10 seeds ([experiment 6](docs/experiments/06-timing-vs-frequency.md)) the CI excludes 0 in **7/9 cells — every ensemble cell** — and the two exceptions are the high-variance HAT ones. Aggregated over cells: **+0.043 [+0.021, +0.065]**. Prequential Kappa-M and Kappa-Temporal are positive in all nine.
 
-### 8.2 Timing or just frequency?
+### 8.2 Timing or just frequency — and is it the monitor?
 
-A blind periodic clock, fire-count matched to the proactive arm, splits the reported gain into a frequency part and a timing part:
+A blind periodic clock, fire-count matched to the proactive arm in **every** cell, splits the reported gain into a frequency part (`freq − sched`) and a timing part (`early − freq`) ([experiment 6](docs/experiments/06-timing-vs-frequency.md)). Over the nine cells: reported **+0.043 [+0.021, +0.065]** = frequency **+0.001 [−0.049, +0.050]** + timing **+0.042 [+0.008, +0.077]**. Timing wins in all six CIC-IDS2017/2018 cells (+0.038 to +0.126), frequency on the UNSW-NB15 ensembles, and the UNSW HAT cell is unresolved. The control is conservative: the clock's windows never overlap, so at a matched count it learns from more labels than PACE in every cell.
 
-| Dataset | Learner | fires sched/freq/early | F1 sched/freq/early | **Δ timing** (early−freq) | verdict |
-|---|---|---|---|---|:---:|
-| CIC-IDS2018 | ARF | 124 / 254 / 253 | 0.913 / 0.888 / 0.926 | **+0.038** [+0.037, +0.038] | **timing** |
-| CIC-IDS2018 | SRP | 124 / 256 / 254 | 0.924 / 0.881 / 0.929 | **+0.047** [+0.047, +0.048] | **timing** |
-| UNSW-NB15 | ARF | 117 / 172 / 171 | 0.603 / 0.652 / 0.662 | +0.010 [+0.001, +0.019] | ~freq |
-| UNSW-NB15 | SRP | 117 / 167 / 167 | 0.697 / 0.746 / 0.745 | −0.001 [−0.008, +0.006] | ~freq |
+A **live reactive control** then asks which part of PACE does the informing. It runs PACE's error test on each learner's own predictions with no monitor, instead of replaying the schedule recorded from HAT at seed 0:
 
-On CIC-IDS2018 adapting *more* on a blind clock is actively **worse than the sparser reactive baseline** (0.881 vs 0.924) — the benefit is genuinely *where* adaptation lands. On UNSW-NB15 the gain is frequency: the timing component is an order of magnitude smaller and indistinguishable from 0 on SRP. The split is consistent across two independent learners, so it is a property of the dataset — reported as an empirical observation across three captures, with **no mechanism claimed**. On a controlled stream whose drift structure is known by construction, the timing effect reproduces at an exactly matched budget: **+0.213 [+0.188, +0.238]** ([experiment 8](docs/experiments/08-synthetic-timing.md)).
+| Dataset | Learner | F1 sched / live / PACE | labels % live / PACE | **Δ monitor** (PACE − live) |
+|---|---|---|---|---|
+| CIC-IDS2017 | HAT | 0.567 / 0.547 / 0.599 | 21.7 / 29.1 | +0.052 [−0.037, +0.140] |
+| CIC-IDS2017 | ARF | 0.717 / 0.749 / 0.747 | 13.5 / 25.1 | −0.002 [−0.019, +0.015] |
+| CIC-IDS2017 | SRP | 0.737 / 0.767 / 0.768 | 8.9 / 21.3 | +0.001 [−0.015, +0.017] |
+| CIC-IDS2018 | HAT | 0.828 / 0.906 / 0.899 | 10.5 / 32.9 | −0.007 [−0.028, +0.014] |
+| CIC-IDS2018 | ARF | 0.913 / 0.925 / 0.926 | 10.5 / 32.3 | +0.000 [+0.000, +0.001] |
+| CIC-IDS2018 | SRP | 0.924 / 0.932 / 0.929 | 9.7 / 32.3 | −0.003 [−0.005, −0.001] |
+| UNSW-NB15 | HAT | 0.355 / 0.427 / 0.452 | 33.4 / 50.4 | +0.025 [−0.099, +0.148] |
+| UNSW-NB15 | ARF | 0.603 / 0.584 / 0.662 | 26.6 / 44.5 | **+0.078** [+0.070, +0.086] |
+| UNSW-NB15 | SRP | 0.697 / 0.697 / 0.745 | 26.1 / 43.4 | **+0.048** [+0.036, +0.060] |
+
+Aggregate Δ monitor **+0.021 [−0.002, +0.045]: not resolved.** Informed placement beats blind placement, but on real traffic with immediate labels the informing is done mostly by the live error test; where the monitor does add (UNSW ensembles) it adds firings, and a blind clock at the same count does as well. On a controlled stream whose drift structure is known by construction, monitor-driven timing beats a blind clock at an exactly matched budget: **+0.213 [+0.188, +0.238]** ([experiment 8](docs/experiments/08-synthetic-timing.md)).
 
 ### 8.3 What makes a good trigger: closed-loop stability
 

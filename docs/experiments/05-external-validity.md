@@ -61,23 +61,27 @@ threshold was pinned as-is (`configs/datasets/cicids2018.yaml`,
 
 ## Results
 
-Overall local F1 (mean over valid rolling windows, 10 seeds) and mean
-adaptation count, reactive (`B`/`*_sched`) vs proactive (`C_early`/`*_early`):
+Overall local F1 (mean over valid rolling windows, 10 seeds), mean
+adaptation count and labelled share of the evaluated stream, reactive
+(`B`/`*_sched`) vs proactive (`C_early`/`*_early`):
 
-| Dataset | Base learner | reactive F1 | proactive F1 | Δ | adaptations (reactive → proactive) |
-|---|---|---|---|---|---|
-| CIC-IDS2017 | HAT | 0.567 | 0.599 | +0.032 | 233 → 169 |
-| CIC-IDS2017 | ARF | 0.717 | 0.747 | +0.030 | 233 → 110 |
-| CIC-IDS2017 | SRP | 0.737 | 0.768 | +0.032 | 233 → 90 |
-| CIC-IDS2018 | HAT | 0.828 | 0.899 | +0.071 | 124 → 306 |
-| CIC-IDS2018 | ARF | 0.913 | 0.926 | +0.012 | 124 → 253 |
-| CIC-IDS2018 | SRP | 0.924 | 0.929 | +0.005 | 124 → 254 |
-| UNSW-NB15 | HAT | 0.355 | 0.452 | +0.097 | 117 → 214 |
-| UNSW-NB15 | ARF | 0.603 | 0.662 | +0.059 | 117 → 171 |
-| UNSW-NB15 | SRP | 0.697 | 0.745 | +0.048 | 117 → 167 |
+| Dataset | Base learner | reactive F1 | proactive F1 | Δ | adaptations (reactive → proactive) | labels % |
+|---|---|---|---|---|---|---|
+| CIC-IDS2017 | HAT | 0.567 | 0.599 | +0.032 | 233 → 169 | 25.5 → 29.1 |
+| CIC-IDS2017 | ARF | 0.717 | 0.747 | +0.030 | 233 → 110 | 25.5 → 25.1 |
+| CIC-IDS2017 | SRP | 0.737 | 0.768 | +0.032 | 233 → 90 | 25.5 → 21.3 |
+| CIC-IDS2018 | HAT | 0.828 | 0.899 | +0.071 | 124 → 306 | 8.9 → 32.9 |
+| CIC-IDS2018 | ARF | 0.913 | 0.926 | +0.012 | 124 → 253 | 8.9 → 32.3 |
+| CIC-IDS2018 | SRP | 0.924 | 0.929 | +0.005 | 124 → 254 | 8.9 → 32.3 |
+| UNSW-NB15 | HAT | 0.355 | 0.452 | +0.097 | 117 → 214 | 32.4 → 50.4 |
+| UNSW-NB15 | ARF | 0.603 | 0.662 | +0.059 | 117 → 171 | 32.4 → 44.5 |
+| UNSW-NB15 | SRP | 0.697 | 0.745 | +0.048 | 117 → 167 | 32.4 → 43.4 |
 
 *Every one of the 9 cells is a positive Δ. Paired confidence intervals for these
-cells are in [experiment 6](06-timing-vs-frequency.md).*
+cells are in [experiment 6](06-timing-vs-frequency.md), together with the live
+reactive control (Part C) that this comparison lacks: against the error test run
+live on each learner's own predictions, the monitor's contribution is not
+resolved (+0.021 [−0.002, +0.045]).*
 
 ![Base-learner × trigger 2×2, three datasets](../figures/fig12_external_validity.png)
 
@@ -85,18 +89,20 @@ cells are in [experiment 6](06-timing-vs-frequency.md).*
 
 **What generalizes (the core claim).** The proactive trigger improves overall
 local F1 in **all 9 cells** — 3 datasets × 3 base learners — every Δ positive.
-The when-to-adapt signal helps every base learner tested on every dataset tested,
-so it is not an artifact of CICIDS2017's specific attack ordering.
+Against the shared schedule the trigger helps every base learner tested on every
+dataset tested, so that comparison is not an artifact of CICIDS2017's specific
+attack ordering. It is, however, a comparison against a *replayed* schedule
+recorded from HAT at seed 0; against a live error test the monitor's own
+contribution is not resolved ([experiment 6, Part C](06-timing-vs-frequency.md#part-c--live-reactive-control-new-runs)).
 
 **What does not generalize — reported plainly.**
 - **Label efficiency is 2017-specific.** On 2017 the proactive trigger fires
-  *fewer* adaptations than the reactive schedule (233 → 113 for ARF, 233 → 91
-  for SRP). On 2018 and UNSW the dynamic trigger fires *more* than the
-  budget-matched schedule (124 → 255/256 on 2018, 117 → 167/173 on UNSW). So
-  "the same gain at a fraction of the adaptation budget" is a 2017 finding,
-  not a universal property of the method — on the other two datasets the
-  proactive trigger buys its F1 gain with *more* label-consuming adaptations,
-  not fewer.
+  *fewer* adaptations than the reactive schedule (233 → 110 for ARF, 233 → 90
+  for SRP) and learns from a similar or smaller share of the stream (21–29% vs
+  25.5%). On 2018 and UNSW it fires *more* (124 → 253/254 on 2018, 117 → 167/171
+  on UNSW) and learns from more labels (32–33% vs 8.9%, 43–50% vs 32.4%). So
+  "the gain at a similar or smaller label budget" is a 2017 finding, not a
+  universal property of the method.
 - **There is no pattern by model strength.** On 2018 the gain *shrinks* with
   strength (HAT +0.071 → ARF +0.012 → SRP +0.005), a ceiling effect: the
   ensembles already reach F1 0.91–0.93 there, leaving little headroom. On UNSW

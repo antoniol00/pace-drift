@@ -24,17 +24,27 @@ supervision. `make run-reactive run-pace`.
 
 ## Results
 
-| arm | adaptations | final F1 | overall local F1 |
-|---|---:|---:|---:|
-| reactive (`B`) | 233 | 0.883 | 0.567 |
-| **PACE (`C_early`)** | **169** | **0.987** | **0.599** |
+| arm | adaptations | labels | final F1 | overall local F1 |
+|---|---:|---:|---:|---:|
+| reactive (`B`) | 233 | 25.5% | 0.883 | 0.567 |
+| reactive, live (`B_pht`) | 161 | 21.7% | 0.978 | 0.547 |
+| **PACE (`C_early`)** | **169** | 29.1% | **0.987** | **0.599** |
+
+`labels` is the share of the evaluated stream whose labels reached the learner.
+A firing opens a 5,000-sample window and a firing inside an open window restarts
+it, so the reactive arm's clustered firings share windows: PACE fires less but
+learns from slightly *more* labels. `B` replays the schedule recorded from HAT at
+seed 0; `B_pht` runs the same error test live on each seed's own predictions
+([experiment 6, Part C](06-timing-vs-frequency.md#part-c--live-reactive-control-new-runs)).
 
 Overall local F1 is the primary metric — the mean F1 over valid rolling windows,
 excluding windows with no positive label rather than scoring them zero. The
 single final-window F1 is noisy and a cumulative mean washes out precisely the
 drift-dense regions where the arms diverge.
 
-PACE reaches higher sustained quality with **fewer** adaptations, not more.
+PACE reaches higher sustained quality with **fewer** adaptations, at a similar
+label budget (29.1% vs 25.5%). Against the live control the gap is +0.052, with a
+CI that includes 0 at ten seeds ([−0.037, +0.140]).
 
 ### Where quality holds and where it diverges
 
@@ -70,5 +80,7 @@ the mechanism the rest of the experiments interrogate.
 **What this does not yet establish:** whether the gain comes from *when* PACE
 adapts or merely from *how often* ([experiment 1](01-frequency-control.md)),
 whether the monitor needs to be anything more than a cheap statistic
-([experiment 2](02-monitor-ablation.md)), and how any of it compares to a modern
-streaming ensemble ([experiment 3](03-sota-baselines.md)).
+([experiment 2](02-monitor-ablation.md)), how any of it compares to a modern
+streaming ensemble ([experiment 3](03-sota-baselines.md)), and whether the
+monitor adds anything to the error test it runs alongside
+([experiment 6, Part C](06-timing-vs-frequency.md#part-c--live-reactive-control-new-runs)).

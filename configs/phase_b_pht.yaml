@@ -1,0 +1,4 @@
+phase: B_pht
+# Live reactive control for HAT. B replays the schedule recorded from HAT at
+# seed 0, so at every other seed it adapts on another run's error. This arm runs
+# the same error Page-Hinkley live on its own predictions; see phase_arf_pht.yaml.

@@ -4,7 +4,8 @@ The evidence behind **PACE** (*Proactive Adaptation via Covariate-shift
 Estimation*), in the order the questions build on each other. Phase names are the
 implementation-level identifiers: PACE is `C_early` on the HAT and
 `ARF_early` / `SRP_early` on the ensembles, measured against the reactive
-baseline (`B`, `*_sched`) and the frequency-matched blind clock (`*_freq`).
+baseline (`B`, `*_sched`), the frequency-matched blind clock (`*_freq`) and the
+live reactive control (`*_pht`).
 
 Each document states the **question**, the **setup**, the **results** (numbers +
 figure), an interpretation, and the **caveats**. Real-data numbers are over 10
@@ -16,25 +17,28 @@ drift-dense regions where strategies actually diverge.
 
 | # | Document | Question | Headline |
 |---|---|---|---|
-| 0 | [Core result](00-core-result.md) | Does an unsupervised trigger beat retraining on error? | **Yes — higher sustained F1 on fewer adaptations, with real anticipation lead times** |
+| 0 | [Core result](00-core-result.md) | Does an unsupervised trigger beat retraining on error? | **Yes, against the replayed schedule — higher sustained F1 on fewer adaptations at a similar label budget, with real anticipation lead times** |
 | 1 | [Frequency control](01-frequency-control.md) | Is the gain *when* it adapts or *how often*? | **Timing** — a blind clock at the same count falls *below* the reactive baseline |
 | 2 | [Monitor ablation](02-monitor-ablation.md) | How cheap can the shift signal be? | Cheap **linear PCA nearly matches** the autoencoder; a trivial mean-shift does not |
-| 3 | [Streaming SOTA](03-sota-baselines.md) | Capacity, supervision, or the trigger? | The ensemble lead is **capacity**, not continuous supervision — and the trigger improves every base learner at a *lower* budget |
+| 3 | [Streaming SOTA](03-sota-baselines.md) | Capacity, supervision, or the trigger? | The ensemble lead is **capacity**, not continuous supervision; the trigger beats the replayed schedule on every learner, but for the ensembles a live error test alone does as well |
 | 4 | [Cost & sensitivity](04-resources-sensitivity.md) | Is it deployable? Is the operating point fragile? | **Sub-ms** typical latency; lead time stable across a wide threshold band |
-| 5 | [External validity](05-external-validity.md) | Does it hold beyond CIC-IDS2017? | **Positive in all 9 (dataset × learner) cells** on CIC-IDS2018 and UNSW-NB15 |
-| 6 | [Timing vs frequency](06-timing-vs-frequency.md) | Does it survive inferential scrutiny, and is it timing or frequency? | **7/9 cells' CIs exclude 0**, aggregate **+0.043 [+0.021, +0.065]**; timing on CIC-IDS2018, frequency on UNSW-NB15 |
+| 5 | [External validity](05-external-validity.md) | Does it hold beyond CIC-IDS2017? | **Positive in all 9 (dataset × learner) cells** against the replayed schedule; label efficiency is 2017-specific |
+| 6 | [Timing vs frequency](06-timing-vs-frequency.md) | Does it survive inferential scrutiny, is it timing or frequency, and is it the monitor? | Aggregate **+0.043 [+0.021, +0.065]** = timing **+0.042** + frequency +0.001; timing on 2017/2018, frequency on UNSW. Against a **live** error test the monitor adds **+0.021 [−0.002, +0.045] — not resolved** |
 | 7 | [Unsupervised comparators](07-unsupervised-comparator.md) | Do published unsupervised detectors do the job as well? | **Within noise — and that is the point.** Every trigger, ours included, collapses the loop on 20–60% of runs, through a verified mechanism no detection metric reveals |
 | 8 | [Controlled stream](08-synthetic-timing.md) | Does the core claim hold where drift is known by construction? | **+0.213 [+0.188, +0.238]** at an exactly matched adaptation budget |
 
 ## The argument in one paragraph
 
 Adapting a streaming intrusion detector *when an unsupervised monitor anticipates
-drift* beats adapting when its error rises, at a lower adaptation budget
-(experiment 0). The benefit is the **timing**, not the frequency: a blind clock
-firing equally often does worse than not trying at all (experiments 1, 6, 8). The
-signal itself can be cheap — linear PCA suffices (experiment 2) — and the policy
-is **model-agnostic**, improving state-of-the-art ensembles as well as a single
-tree (experiment 3), across three datasets (experiments 5, 6). The final
+drift* beats replaying a reactive schedule (experiment 0), on every learner and
+dataset (experiments 3, 5). The benefit is **timing**, not frequency: a blind
+clock firing equally often does worse (experiments 1, 6, 8). But the last control
+narrows the claim: run **live** on each learner's own predictions, the error test
+PACE runs alongside its monitor matches it on CIC-IDS2017 and CIC-IDS2018 with
+fewer labels, and the monitor's own contribution is not resolved (experiment 6,
+Part C) — informed placement matters, but on real traffic with immediate labels
+it comes mostly from the live error test. The signal itself can be cheap —
+linear PCA suffices (experiment 2). The final
 experiment adds the criterion that should govern this whole family of methods:
 judge a trigger by **what it does to the adaptation loop**, not by how well it
 detects — and, measured that way, this kind of loop is **fragile** for every

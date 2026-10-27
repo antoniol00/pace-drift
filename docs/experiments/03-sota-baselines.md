@@ -68,34 +68,44 @@ their continuous-learning quality on ~233 adaptations instead of ~2M.
 
 ### 3. The trigger transfers to the strongest learners
 
-| base learner | reactive | PACE | Δ | adaptations |
-|---|---:|---:|---:|---|
-| HAT | 0.567 | 0.599 | **+0.032** | 233 → 169 |
-| ARF | 0.717 | 0.747 | **+0.030** | 233 → 110 |
-| SRP | 0.737 | 0.768 | **+0.032** | 233 → **90** |
+| base learner | reactive | PACE | Δ | adaptations | labels % |
+|---|---:|---:|---:|---|---|
+| HAT | 0.567 | 0.599 | **+0.032** | 233 → 169 | 25.5 → 29.1 |
+| ARF | 0.717 | 0.747 | **+0.030** | 233 → 110 | 25.5 → 25.1 |
+| SRP | 0.737 | 0.768 | **+0.032** | 233 → **90** | 25.5 → **21.3** |
+
+`labels` is the share of the evaluated stream learned from: a firing opens a
+5,000-sample window and a firing inside an open window restarts it, so the
+reactive schedule's clustered firings cost fewer labels than their count
+suggests.
 
 ![Base-learner × trigger 2×2](../figures/fig11_early_ensemble.png)
 
-The proactive trigger improves **every** base learner while using **fewer**
-adaptations. It is therefore not a crutch for a weak single tree: it lifts the
-state-of-the-art ensemble too, and more label-efficiently. The best single
-configuration is **SRP + PACE = 0.768 sustained F1 on 90 adaptations**,
-approaching continuous SRP's 0.811, which needs ~2M supervised updates.
+Against the shared schedule the proactive trigger improves **every** base
+learner with **fewer** adaptations, at the same label budget on ARF and a
+smaller one on SRP: **SRP + PACE = 0.768 sustained F1 on 90 adaptations and 21%
+of the labels**, approaching continuous SRP's 0.811 on all of them.
+
+**That is not yet a test of the monitor.** The shared schedule replays HAT's
+error, not the ensemble's own. Run live on each ensemble with no monitor
+(`ARF_pht` / `SRP_pht`), the same error test reaches **0.749 (ARF) and 0.767
+(SRP) on 13.5% and 8.9% of the labels** — the whole lift, at fewer labels. On
+this dataset the ensembles' gain over `*_sched` is the gain of a live over a
+replayed trigger; see [experiment 6](06-timing-vs-frequency.md#part-c--live-reactive-control-new-runs).
 
 ## Interpretation
 
-The transferable contribution is a cheap, model-agnostic **when-to-adapt**
-signal, and the practical recipe is **ensemble + proactive triggered
-adaptation**. Choosing a stronger base learner buys more than any change to the
-trigger does — but the two are orthogonal, and the trigger's gain survives on top
-of the stronger learner, which is the harder version of the claim.
+Choosing a stronger base learner buys more than any change to the trigger does.
+The practical recipe on this dataset is **ensemble + a live, gated error
+trigger**: the covariate-shift monitor adds nothing measurable on top of it for
+the ensembles here (experiment 6, Part C).
 
 ## Caveats
 
-- The per-cell Δ is modest (~+0.03). The strength of the result is its
-  **consistency and direction** across learners at a *reduced* budget, not the
-  size of any single number; [experiment 6](06-timing-vs-frequency.md) subjects it
-  to paired confidence intervals across three datasets.
+- The per-cell Δ is modest (~+0.03), and for the ensembles it is the live
+  trigger, not the monitor; [experiment 6](06-timing-vs-frequency.md) subjects
+  it to paired confidence intervals across three datasets and to the live
+  control.
 - The ensembles report no drift events by construction (they self-adapt
   internally); that is not a failure to detect.
 - ARF and especially SRP are **expensive**: SRP's p95 latency is ~11 ms/sample

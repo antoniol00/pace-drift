@@ -63,9 +63,9 @@ run-early-ensemble:
 	uv run python run_experiment.py --phase SRP_early --seeds $(SEEDS) --n-jobs $(N_JOBS)
 
 # Controls for the ensembles: a blind clock at ARF/SRP_early's fire count, and the
-# error Page-Hinkley run live on each ensemble's own predictions (no schedule).
+# error Page-Hinkley run live on each learner's own predictions (no schedule).
 run-ensemble-controls:
-	@for p in ARF_freq SRP_freq ARF_pht SRP_pht; do \
+	@for p in ARF_freq SRP_freq B_pht ARF_pht SRP_pht; do \
 		uv run python run_experiment.py --phase $$p --seeds $(SEEDS) --n-jobs $(N_JOBS); done
 
 # Monitor ablation and published comparators, all fire-count matched to the
@@ -85,7 +85,7 @@ run-anchor: schedule run-reactive run-pace run-freq run-sota run-sota-matched ru
 # interval in configs/datasets/<name>.yaml — never pass those as CLI flags.
 DATA2018 ?= cicids2018
 DATAUNSW ?= unsw
-DYNPHASES = C_early ARF_early SRP_early C_freq ARF_freq SRP_freq ARF_pht SRP_pht
+DYNPHASES = C_early ARF_early SRP_early C_freq ARF_freq SRP_freq B_pht ARF_pht SRP_pht
 SCHEDPHASES = B ARF_sched SRP_sched
 
 schedule-2018:

@@ -23,10 +23,10 @@ VALID_PHASES = (
     # Budget-matched controls: the same learners adapting only inside triggered
     # windows on the shared schedule, i.e. at the reactive arm's label budget.
     "ARF_sched", "SRP_sched",
-    # Live reactive controls for the ensembles: the error Page-Hinkley runs on the
-    # ensemble's own predictions instead of replaying the HAT-derived schedule, so
-    # *_early vs *_pht isolates what the monitor adds to the same live error test.
-    "ARF_pht", "SRP_pht",
+    # Live reactive controls: the error Page-Hinkley runs on the learner's own
+    # predictions instead of replaying the schedule recorded from HAT at seed 0,
+    # so *_early vs *_pht isolates what the monitor adds to the same live error test.
+    "B_pht", "ARF_pht", "SRP_pht",
     # PACE: the proactive covariate-shift trigger, on each base learner.
     "C_early", "ARF_early", "SRP_early",
     # Frequency-matched controls: a blind periodic clock whose fire count
