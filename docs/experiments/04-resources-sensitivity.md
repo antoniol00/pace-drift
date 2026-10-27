@@ -16,12 +16,16 @@ and where does the compute go?
 
 ![Resource profile](../figures/fig4_resources.png)
 
-- **Throughput** (samples/s, mean over seeds): the HAT phases run at ~7K–16K/s;
-  the ensembles are far heavier — ARF ~1.0K/s, and **SRP ~130/s** (its p95 latency
+- **Throughput** (samples/s, mean over seeds): the HAT phases run at ~2.4K–13.3K/s;
+  continuous ensembles are far heavier — ARF ~1.0K/s, and **SRP ~130/s** (its p95 latency
   is ~11 ms/sample vs sub-ms for HAT). C_early ~7.2K/s.
 - **Latency tail**: per-sample latency is **sub-millisecond typically** (p50
-  ~0.08 ms, p99 ~1 ms), but the monitor's periodic refit **spikes the max to ~1 s** —
-  the relevant number for a line-rate IDS, and worth stating openly.
+  0.04–0.07 ms in every HAT arm, PACE included, except KSWIN at 0.35 ms because its
+  KS test runs on every sample; p99 ~1 ms), but the monitor's periodic refit
+  **spikes the max to ~1 s** — the relevant number for a line-rate IDS, and worth
+  stating openly. PACE's lower throughput is that minority of expensive samples,
+  not the typical one: more update time (158 s vs 119 s per run for B) plus 27 s
+  of monitor, about a third more compute.
 - **Where the time goes**: the proactive arm spends a visible slice in the shift
   monitor; the HAT
   update/inference is the rest.

@@ -26,8 +26,8 @@ supervision. `make run-reactive run-pace`.
 
 | arm | adaptations | final F1 | overall local F1 |
 |---|---:|---:|---:|
-| reactive (`B`) | 233 | 0.788 | 0.567 |
-| **PACE (`C_early`)** | **169** | **0.986** | **0.599** |
+| reactive (`B`) | 233 | 0.883 | 0.567 |
+| **PACE (`C_early`)** | **169** | **0.987** | **0.599** |
 
 Overall local F1 is the primary metric — the mean F1 over valid rolling windows,
 excluding windows with no positive label rather than scoring them zero. The
@@ -48,7 +48,7 @@ and why the segment view is reported alongside it.
 
 ![Lead time and cost/benefit](../figures/fig3_early_detection.png)
 
-Anticipation lead times are strictly positive across every seed (pooled mean ~7K
+Anticipation lead times are strictly positive in each of the ten seeds (pooled mean ~7K
 samples): the monitor fires *before* the classification error responds. That is
 the mechanism the rest of the experiments interrogate.
 
@@ -60,8 +60,12 @@ the mechanism the rest of the experiments interrogate.
   foresees about a quarter of the drifts it could. Its value comes from the ones
   it does catch, not from catching all of them
   ([experiment 4](04-resources-sensitivity.md)).
-- `no_recovery` is high (~0.66–0.71) for *both* arms — a property of this
-  stream's dense, overlapping drifts rather than a failure of either strategy.
+- `no_recovery` is high for *both* arms (0.66 reactive, 0.72 PACE, ten seeds) — a
+  property of this stream's dense, overlapping drifts rather than a failure of
+  either strategy. Mean RT over recovered events is 440 samples (95% CI
+  [367, 526]) reactive and 1,235 [939, 1,571] PACE; not a like-for-like speed
+  contrast, since PACE's events are its own firings (schedule-exempt) and the
+  recovered subsets differ at different no-recovery rates (survivorship).
 
 **What this does not yet establish:** whether the gain comes from *when* PACE
 adapts or merely from *how often* ([experiment 1](01-frequency-control.md)),

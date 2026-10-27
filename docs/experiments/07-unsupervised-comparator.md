@@ -56,17 +56,18 @@ batch gradient descent (no scikit-learn dependency).
 Full tables: `results/report/comparator/analysis.md`
 (`scripts/comparator_analysis.py`); figure `docs/figures/fig15_closed_loop_stability.png`.
 
-| monitor | collapsed seeds | Fisher vs AE | FPR med / worst | train atk% |
+| monitor | collapsed seeds | Fisher vs AE | FPR med / worst | train atk% all (healthy / collapsed) |
 |---|---:|---:|---:|---:|
-| autoencoder (ours) | 4/20 | — | 0.006 / 0.662 | 0.26 |
-| HDDDM (CIDUE'11) | 5/20 | 1.000 | 0.005 / 0.603 | 0.31 |
-| PCA linear | 6/20 | 0.716 | 0.006 / 0.689 | 0.37 |
-| D3 (CIKM'19) | 10/20 | 0.096 | 0.225 / 0.595 | 0.36 |
-| mean-shift (floor) | 12/20 | **0.022** | 0.609 / 0.700 | 0.46 |
+| autoencoder (ours) | 4/20 | — | 0.006 / 0.662 | 0.26 (0.25 / 0.41) |
+| HDDDM (CIDUE'11) | 5/20 | 1.000 | 0.005 / 0.603 | 0.31 (0.29 / 0.43) |
+| PCA linear | 6/20 | 0.716 | 0.006 / 0.689 | 0.37 (0.34 / 0.48) |
+| D3 (CIKM'19) | 10/20 | 0.096 | 0.225 / 0.595 | 0.36 (0.29 / 0.42) |
+| mean-shift (floor) | 12/20 | **0.022** | 0.609 / 0.700 | 0.46 (0.37 / 0.46) |
 
 *("collapsed" = cumulative accuracy < 0.90; the majority class alone scores
 ~0.80. `train atk%` = attack fraction of the samples actually fed to the learner
-inside triggered windows; the stream's own rate is 0.20.)*
+inside triggered windows, median over seeds and then over healthy / collapsed
+seeds; the stream's own rate is 0.20.)*
 
 Pooled, the autoencoder against all four alternatives is 4/20 vs 33/80,
 **p = 0.119**. Paired Wilcoxon on cumulative accuracy: only mean-shift separates
@@ -103,10 +104,12 @@ placed triggers open training windows over attack-dense stretches. The learner i
 fed well above the stream's 20% attack rate, its prior skews toward ATTACK, the
 false-positive rate on benign traffic explodes (worst case 0.60–0.70, i.e. over
 half of benign traffic flagged — operationally unusable), the class-PHT then
-fires constantly, and that opens more badly placed windows. Across monitors
-`train atk%` (0.26 → 0.31 → 0.37 → 0.36 → 0.46) broadly tracks the collapse count
-(4 → 5 → 6 → 10 → 12); the tracking is monotone except for D3, whose pooled
-figure is diluted by its healthy seeds.
+fires constantly, and that opens more badly placed windows. Within every matched
+arm the collapsed seeds were fed 0.41–0.48 attack against 0.25–0.37 for the
+healthy seeds. Pooled, `train atk%` (0.26 → 0.31 → 0.37 → 0.36 → 0.46) tracks the
+collapse count (4 → 5 → 6 → 10 → 12) only broadly, because each pooled median
+mixes the two modes in a different proportion; PCA sits above D3 because even its
+healthy seeds are fed more attack (0.34 vs 0.29).
 
 **Mode 2 — adaptation saturation** (native D3 at published defaults). It fires so
 often that it is essentially always inside a training window: `train atk%` sits

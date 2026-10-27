@@ -22,7 +22,7 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
-from paper_figures import OUT, RUNS, SEEDS  # noqa: E402
+from paper_figures import ACC, BLUE, FULL, RUNS, SEEDS, SLATE, SLATE_LT, save, tag, values  # noqa: E402
 
 from driftgan.config import load_config
 from driftgan.data.stream import stream_csv
@@ -34,13 +34,14 @@ CACHE.mkdir(parents=True, exist_ok=True)
 HORIZON = 20_000
 REFRACTORY = 10_000
 
-MON_COLOR = {
-    "ae": "#009E73", "pca": "#0072B2", "ks": "#E69F00",
-    "mmd": "#CC79A7", "mean": "#999999",
+# (colour, line style, marker) per monitor; the AE keeps PACE's deep blue
+MON_STYLE = {
+    "ae": (ACC, "-", "o"), "pca": (BLUE[2], "-", "s"), "ks": (BLUE[1], "--", "^"),
+    "mmd": (SLATE, "-.", "v"), "mean": (SLATE_LT, ":", "D"),
 }
 MON_LABEL = {
-    "ae": "AE (generative)", "pca": "PCA recon", "ks": "KS distance",
-    "mmd": "MMD", "mean": "mean-shift (floor)",
+    "ae": "Autoencoder", "pca": "PCA reconstruction", "ks": "KS distance",
+    "mmd": "MMD", "mean": "Mean shift",
 }
 
 
@@ -121,48 +122,44 @@ def fig7_monitor_ablation(cfg) -> None:
     monitors = {"ae": ae_by_seed, **cheap}
 
     taus = np.linspace(0.3, 5.0, 24)
-    fig, (axA, axB) = plt.subplots(1, 2, figsize=(12, 4.8),
-                                   gridspec_kw={"width_ratios": [1.25, 1]})
-    at_budget = {}
+    curves, at_budget = {}, {}
     for name, sb in monitors.items():
         recall, fp, lead = frontier(sb, class_by_seed, taus)
-        axA.plot(fp, recall, "-o", color=MON_COLOR[name], ms=3.5, lw=1.8,
-                 label=MON_LABEL[name])
+        curves[name] = (fp, recall)
         # recall at the tightest FP budget <= 0.5 (fall back to min FP point)
         ok = fp <= 0.5
         j = int(np.argmax(recall * ok)) if ok.any() else int(np.argmin(fp))
         at_budget[name] = (recall[j], lead[j])
-    axA.set_xlabel("anticipated false-positive rate")
-    axA.set_ylabel("anticipation recall")
-    axA.set_title("A. Detectability frontier — is the AE's signal better?")
-    axA.set_xlim(0, 1)
-    axA.set_ylim(0, 1)
-    axA.legend(loc="lower right", fontsize=8.5)
-
     names = list(monitors)
-    x = np.arange(len(names))
-    axB.bar(x, [at_budget[n][0] for n in names], color=[MON_COLOR[n] for n in names],
-            edgecolor="white")
-    for xi, n in zip(x, names, strict=True):
-        axB.annotate(f"{at_budget[n][0]:.2f}", (xi, at_budget[n][0]), xytext=(0, 3),
-                     textcoords="offset points", ha="center", fontsize=8.5,
-                     fontweight="bold")
-    axB.set_xticks(x)
-    axB.set_xticklabels([MON_LABEL[n].split(" (")[0] for n in names], rotation=25,
-                        ha="right", fontsize=8.5)
-    axB.set_ylabel("anticipation recall at FP ≤ 0.5")
-    axB.set_title("B. Recall at a matched false-positive budget")
-    axB.set_ylim(0, 1)
-    fig.text(0.5, 0.005, "Under a common detector, the generative AE (green) does NOT "
-             "dominate: a trivial mean-shift statistic matches or exceeds it, and no "
-             "monitor clears recall ≈ 0.5.\nThe autoencoder is not justified as the "
-             "anticipation signal — a cheap covariate-shift test suffices.",
-             ha="center", va="bottom", fontsize=8.5, color="#555")
-    fig.subplots_adjust(bottom=0.22)
-    fig.savefig(OUT / "fig7_monitor_ablation.png")
-    plt.close(fig)
-    print("wrote", OUT / "fig7_monitor_ablation.png")
     print("recall@FP<=0.5:", {n: round(at_budget[n][0], 3) for n in names})
+
+    for labels in (False, True):
+        fig, (axA, axB) = plt.subplots(1, 2, figsize=(FULL, 2.4),
+                                       gridspec_kw={"width_ratios": [1.3, 1]})
+        fig.subplots_adjust(wspace=0.28)
+        for name in names:
+            col, ls, mk = MON_STYLE[name]
+            axA.plot(*curves[name], ls=ls, marker=mk, color=col, ms=3, lw=1.1,
+                     label=MON_LABEL[name])
+        axA.set_xlabel("Anticipated false-alarm rate")
+        axA.set_ylabel("Anticipation recall")
+        axA.set_xlim(0, 1)
+        axA.set_ylim(0, 1)
+        axA.grid(axis="x")
+        axA.legend(loc="upper left")
+        tag(axA, "a")
+
+        x = np.arange(len(names))
+        rec = [at_budget[n][0] for n in names]
+        axB.bar(x, rec, 0.62, color=[MON_STYLE[n][0] for n in names], edgecolor="white")
+        if labels:
+            values(axB, x, rec)
+        axB.set_xticks(x)
+        axB.set_xticklabels(["AE", "PCA", "KS", "MMD", "Mean\nshift"])
+        axB.set_ylabel(r"Recall at false-alarm rate $\leq$ 0.5")
+        axB.set_ylim(0, 1)
+        tag(axB, "b")
+        save(fig, "fig7_monitor_ablation", labels, (axA, axB))
 
 
 def main() -> None:

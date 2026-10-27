@@ -18,24 +18,28 @@ import json
 import matplotlib.pyplot as plt
 import numpy as np
 
-# reuse the exact palette/style/labels from the verdict figures
-from paper_figures import COLOR, OUT, RUNS, SEEDS  # noqa: E402
+# reuse the palette, sizes and save/variant logic of the paper figures
+from paper_figures import ACC, BLUE, COLOR, FULL, MUTED, OUT, RUNS, SEEDS, SLATE_LT, save, tag  # noqa: E402
 from river import drift as river_drift
 
 from driftgan.early.dual_pht import match_lead_times
 
 TIME_KEYS = [
-    ("time_hat_inference_s", "HAT inference", "#8c8c8c"),
-    ("time_hat_update_s", "HAT update", "#5b5b5b"),
-    ("time_monitor_s", "shift monitor", "#009E73"),
-    ("time_other_s", "other", "#d9d9d9"),
+    ("time_hat_inference_s", "Inference", BLUE[0]),
+    ("time_hat_update_s", "Update", BLUE[2]),
+    ("time_monitor_s", "Shift monitor", ACC),
+    ("time_other_s", "Other", SLATE_LT),
 ]
+PHASES = {  # top to bottom
+    "B": "HAT reactive (PHT)", "B_adwin": "HAT reactive (ADWIN)",
+    "B_kswin": "HAT reactive (KSWIN)", "C_freq": "HAT blind clock", "C_early": "HAT PACE",
+    "ARF_sched": "ARF reactive", "ARF_early": "ARF PACE", "ARF": "ARF continuous",
+    "SRP_sched": "SRP reactive", "SRP_early": "SRP PACE", "SRP": "SRP continuous",
+}
 
 
 def available_phases() -> list[str]:
-    order = ["B", "B_adwin", "B_kswin", "C_freq", "C_early",
-             "ARF_sched", "ARF_early", "SRP_sched", "SRP_early"]
-    return [p for p in order
+    return [p for p in PHASES
             if all((RUNS / p / f"seed_{s}" / "cost.json").exists() for s in SEEDS)]
 
 
@@ -51,70 +55,81 @@ def load_costs(phase: str) -> list[dict]:
 # --------------------------------------------------------------------------- #
 # Figure 4 — resource / real-time profile
 # --------------------------------------------------------------------------- #
-def fig4_resources() -> None:
-    phases = available_phases()
-    fig, (axT, axL, axB) = plt.subplots(1, 3, figsize=(15.5, 4.8),
-                                        gridspec_kw={"width_ratios": [1, 1.2, 1.3]})
-    x = np.arange(len(phases))
+def fig4_resources(labels: bool = False) -> None:
+    """Throughput, latency percentiles and the compute share of each component.
 
-    # -- A: throughput (samples / s) ---------------------------------------
+    Arms are rows, shared by the three panels. Throughput and latency span three
+    orders of magnitude, so both use a log axis and dots rather than bars; the
+    breakdown is a share, since absolute seconds are dominated by continuous SRP.
+    """
+    phases = available_phases()
+    y = np.arange(len(phases))
+    fig, (axT, axL, axB) = plt.subplots(1, 3, figsize=(FULL, 2.6), sharey=True,
+                                        gridspec_kw={"width_ratios": [1, 1.15, 1.15]})
+    fig.subplots_adjust(wspace=0.12)
+
+    # -- (a) throughput (samples / s) --------------------------------------
     thru = []
     for ph in phases:
-        cs = load_costs(ph)
         vals = []
-        for c in cs:
+        for c in load_costs(ph):
             total = sum(c.get(k, 0.0) for k, _, _ in TIME_KEYS)
             vals.append(c["n_samples"] / total if total else np.nan)
-        thru.append(np.nanmean(vals))
-    axT.bar(x, thru, color=[COLOR[p] for p in phases], edgecolor="white")
-    for xi, v in zip(x, thru, strict=False):
-        axT.annotate(f"{v/1e3:.1f}K", (xi, v), xytext=(0, 3),
-                     textcoords="offset points", ha="center", fontsize=8,
-                     fontweight="bold")
-    axT.set_xticks(x)
-    axT.set_xticklabels(phases, rotation=30, ha="right", fontsize=8)
-    axT.set_ylabel("throughput (samples / s)")
-    axT.set_title("A. Throughput")
+        thru.append(float(np.nanmean(vals)))
+    print("  fig4 throughput:", {p: round(t) for p, t in zip(phases, thru, strict=True)})
+    for yi, ph, v in zip(y, phases, thru, strict=True):
+        axT.plot([1e1, v], [yi, yi], color=COLOR[ph], lw=0.8, zorder=2)
+        axT.scatter(v, yi, s=22, color=COLOR[ph], edgecolor="white", linewidth=0.5, zorder=3)
+        if labels:
+            axT.annotate(f"{v / 1e3:.1f}K", (v, yi), xytext=(4, 0), textcoords="offset points",
+                         va="center", fontsize=6.5)
+    axT.set_xscale("log")
+    axT.set_xlim(1e1, 4e4)
+    axT.set_xlabel("Throughput (samples/s)")
+    axT.set_yticks(y)
+    axT.set_yticklabels([PHASES[p] for p in phases])
+    axT.invert_yaxis()
+    tag(axT, "a")
 
-    # -- B: latency tail p50/p95/p99/max (log) -----------------------------
-    pcts = [("latency_p50_ms", "p50"), ("latency_p95_ms", "p95"),
-            ("latency_p99_ms", "p99"), ("latency_max_ms", "max")]
-    w = 0.2
-    shades = [1.0, 0.75, 0.5, 0.32]
-    for j, (key, name) in enumerate(pcts):
-        vals = [np.mean([c[key] for c in load_costs(ph)]) for ph in phases]
-        bars = axL.bar(x + (j - 1.5) * w, vals, w,
-                       color=[COLOR[p] for p in phases], alpha=shades[j],
-                       edgecolor="white", label=name)
-        del bars
-    axL.set_yscale("log")
-    axL.set_xticks(x)
-    axL.set_xticklabels(phases, rotation=30, ha="right", fontsize=8)
-    axL.set_ylabel("per-sample latency (ms, log)")
-    axL.set_title("B. Latency: median → worst-case (p50/p95/p99/max)")
-    axL.axhline(1.0, color="#888", lw=0.8, ls="--")
-    axL.annotate("1 ms", (x[-1] + 0.3, 1.0), fontsize=8, color="#888", va="bottom")
-    axL.text(0.5, 0.97, "sub-ms typical; the monitor's periodic refit\nspikes the max to ~1 s", transform=axL.transAxes, ha="center", va="top",
-             fontsize=8.5, color="#555")
-    # simple percentile legend via grey ramp
-    axL.legend(title="percentile", fontsize=8, title_fontsize=8, ncol=4,
-               loc="lower center")
+    # -- (b) latency p50 / p95 / p99 / max (log) ---------------------------
+    pcts = [("latency_p50_ms", "p50", "o"), ("latency_p95_ms", "p95", "s"),
+            ("latency_p99_ms", "p99", "^"), ("latency_max_ms", "max", "D")]
+    lat = np.array([[np.mean([c[k] for c in load_costs(ph)]) for k, _, _ in pcts]
+                    for ph in phases])
+    axL.hlines(y, lat[:, 0], lat[:, -1], color=MUTED, lw=0.7, zorder=2)
+    for j, (_key, name, mk) in enumerate(pcts):
+        axL.scatter(lat[:, j], y, s=16, marker=mk, color=BLUE[j + 1 if j else 0],
+                    edgecolor="white", linewidth=0.4, zorder=3, label=name)
+    axL.axvline(1.0, color=MUTED, lw=0.6, ls="--")
+    axL.set_xscale("log")
+    axL.set_xlabel("Per-sample latency (ms)")
+    axL.legend(loc="lower left", bbox_to_anchor=(0, 1.06), ncol=4, handletextpad=0.1,
+               columnspacing=0.7, borderaxespad=0)
+    tag(axL, "b")
 
-    # -- C: compute-time breakdown (stacked, mean seconds) -----------------
-    bottoms = np.zeros(len(phases))
-    for key, name, col in TIME_KEYS:
-        vals = np.array([np.mean([c.get(key, 0.0) for c in load_costs(ph)])
-                         for ph in phases])
-        axB.bar(x, vals, bottom=bottoms, color=col, edgecolor="white",
-                linewidth=0.6, label=name)
-        bottoms += vals
-    axB.set_xticks(x)
-    axB.set_xticklabels(phases, rotation=30, ha="right", fontsize=8)
-    axB.set_ylabel("compute time over the run (s)")
-    axB.set_title("C. Where the time goes")
-    axB.legend(fontsize=7.5, ncol=2, loc="upper left")
-    fig.savefig(OUT / "fig4_resources.png")
-    plt.close(fig)
+    # -- (c) compute-time share by component -------------------------------
+    secs = np.array([[np.mean([c.get(k, 0.0) for c in load_costs(ph)]) for k, _, _ in TIME_KEYS]
+                     for ph in phases])
+    share = 100 * secs / secs.sum(axis=1, keepdims=True)
+    left = np.zeros(len(phases))
+    for j, (_key, name, col) in enumerate(TIME_KEYS):
+        axB.barh(y, share[:, j], 0.66, left=left, color=col, edgecolor="white",
+                 linewidth=0.5, label=name)
+        left += share[:, j]
+    if labels:
+        for yi, s in zip(y, share[:, 2], strict=True):
+            if s >= 0.5:
+                axB.annotate(f"{s:.0f}%", (100, yi), xytext=(3, 0), textcoords="offset points",
+                             va="center", fontsize=6.5)
+    axB.set_xlim(0, 100)
+    axB.set_xlabel("Share of compute time (%)")
+    axB.legend(loc="lower left", bbox_to_anchor=(0, 1.06), ncol=2, handlelength=1.0,
+               columnspacing=0.8, borderaxespad=0)
+    tag(axB, "c")
+    for ax in (axT, axL, axB):
+        ax.grid(axis="y", visible=False)
+        ax.grid(axis="x")
+    save(fig, "fig4_resources", labels)
 
 
 # --------------------------------------------------------------------------- #
@@ -139,11 +154,13 @@ def _sweep_seed(series: list, class_fires: list[int], thresholds: np.ndarray,
     return {"recall": recall, "fp": fp, "lead": lead, "nfires": nfires}
 
 
-def fig5_sensitivity() -> None:
-    # operating point + sweep params (match phase_c_early.yaml)
-    delta, min_instances, horizon, op_threshold = 0.0005, 10, 20_000, 0.1
-    thresholds = np.geomspace(0.01, 2.0, 24)
+OP_THRESHOLD = 0.1  # operating point (phase_c_early.yaml)
 
+
+def fig5_sweep() -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """Replay the recon Page-Hinkley over each seed's persisted score series."""
+    delta, min_instances, horizon = 0.0005, 10, 20_000  # match phase_c_early.yaml
+    thresholds = np.geomspace(0.01, 2.0, 24)
     per_seed = []
     for s in SEEDS:
         lt = json.load(open(RUNS / "C_early" / f"seed_{s}" / "lead_time.json"))
@@ -155,49 +172,55 @@ def fig5_sensitivity() -> None:
     recall = np.array([p["recall"] for p in per_seed])
     fp = np.array([p["fp"] for p in per_seed])
     lead = np.array([p["lead"] for p in per_seed])
+    return thresholds, recall, fp, lead
 
-    fig, (axA, axB) = plt.subplots(1, 2, figsize=(12, 4.8))
-    green = COLOR["C_early"]
 
-    # -- A: recall & false-positive vs threshold (both are rates -> one axis)
+def fig5_sensitivity(sweep: tuple, labels: bool = False) -> None:
+    thresholds, recall, fp, lead = sweep
+    fig, (axA, axB) = plt.subplots(1, 2, figsize=(FULL, 2.3))
+    fig.subplots_adjust(wspace=0.28)
+
+    # -- (a) recall & false-positive rate vs threshold (both rates -> one axis)
     r_m, f_m = recall.mean(0), fp.mean(0)
-    oi = int(np.argmin(np.abs(thresholds - op_threshold)))
-    axA.plot(thresholds, r_m, "-o", color=green, ms=4, lw=1.8,
-             label="anticipation recall (drifts foreseen)")
-    axA.plot(thresholds, f_m, "-s", color="#E69F00", ms=4, lw=1.8,
-             label="anticipated false-positive rate")
-    axA.axvline(op_threshold, color="#d55e00", ls="--", lw=1.3)
-    axA.annotate(f"operating\npoint = {op_threshold}\n(recall {r_m[oi]:.2f})",
-                 (op_threshold, 0.9), xytext=(6, 0), textcoords="offset points",
-                 ha="left", va="top", fontsize=8.5, color="#d55e00")
-    axA.set_xscale("log")
-    axA.set_xlabel("recon PageHinkley threshold (log)")
-    axA.set_ylabel("rate")
-    axA.set_title("A. Recall / false-positive vs threshold")
+    axA.plot(thresholds, r_m, "-o", color=ACC, ms=3, label="Anticipation recall")
+    axA.plot(thresholds, f_m, "--s", color=BLUE[1], ms=3, label="Anticipated false-alarm rate")
+    axA.set_xlabel("Page-Hinkley threshold on the monitor score")
+    axA.set_ylabel("Rate")
     axA.set_ylim(0, 1)
-    axA.legend(loc="upper right", fontsize=8.5)
+    axA.legend(loc="lower left", bbox_to_anchor=(0, 1.06), ncol=2, borderaxespad=0)
+    tag(axA, "a")
 
-    # -- B: mean lead time vs threshold ------------------------------------
+    # -- (b) mean lead time vs threshold -----------------------------------
     l_m, l_sd = lead.mean(0), lead.std(0)
     axB.fill_between(thresholds, (l_m - l_sd) / 1e3, (l_m + l_sd) / 1e3,
-                     color=green, alpha=0.15, lw=0)
-    axB.plot(thresholds, l_m / 1e3, "-o", color=green, ms=4, lw=1.8)
-    axB.axvline(op_threshold, color="#d55e00", ls="--", lw=1.3)
-    axB.annotate(f"operating point = {op_threshold}", (op_threshold, axB.get_ylim()[1]),
-                 xytext=(6, -14), textcoords="offset points", fontsize=8.5,
-                 color="#d55e00")
-    axB.set_xscale("log")
-    axB.set_xlabel("recon PageHinkley threshold (log)")
-    axB.set_ylabel("mean anticipation lead (thousands of samples)")
-    axB.set_title("B. Lead time is stable across a wide threshold band")
-    fig.savefig(OUT / "fig5_early_sensitivity.png")
-    plt.close(fig)
+                     color=ACC, alpha=0.18, lw=0)
+    axB.plot(thresholds, l_m / 1e3, "-o", color=ACC, ms=3)
+    axB.set_xlabel("Page-Hinkley threshold on the monitor score")
+    axB.set_ylabel(r"Mean lead time ($\times 10^3$ samples)")
+    tag(axB, "b")
+
+    oi = int(np.argmin(np.abs(thresholds - OP_THRESHOLD)))
+    for ax in (axA, axB):
+        ax.set_xscale("log")
+        ax.axvline(OP_THRESHOLD, color=MUTED, ls="--", lw=0.7)
+        ax.grid(axis="x")
+    if labels:
+        axA.annotate(f"operating point {OP_THRESHOLD}\nrecall {r_m[oi]:.2f}",
+                     (OP_THRESHOLD, 0.97), xytext=(3, 0), textcoords="offset points",
+                     ha="left", va="top", fontsize=6.5)
+        axB.annotate(f"{l_m[oi] / 1e3:.1f}K", (OP_THRESHOLD, l_m[oi] / 1e3), xytext=(3, 3),
+                     textcoords="offset points", fontsize=6.5)
+    print(f"  fig5 operating point: recall {r_m[oi]:.2f}, lead {l_m[oi]:.0f}, "
+          f"max recall {r_m.max():.2f}")
+    save(fig, "fig5_early_sensitivity", labels, (axA, axB))
 
 
 def main() -> None:
-    fig4_resources()
-    fig5_sensitivity()
-    print("wrote:", OUT / "fig4_resources.png", "and", OUT / "fig5_early_sensitivity.png")
+    sweep = fig5_sweep()
+    for labels in (False, True):
+        fig4_resources(labels)
+        fig5_sensitivity(sweep, labels)
+    print("wrote fig4 and fig5 to", OUT)
 
 
 if __name__ == "__main__":

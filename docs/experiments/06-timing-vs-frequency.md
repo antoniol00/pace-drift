@@ -26,15 +26,16 @@ traces. Script: `scripts/tier0_analysis.py`.
   variance); every ensemble cell has a CI excluding 0, five of the six with
   10/10 seeds agreeing at Wilcoxon p=0.002. Aggregate over the 9 cells: mean Δ
   **+0.043**, 95% CI **[+0.021, +0.065]**, 9/9 positive (sign test p=0.0039).
-- **Confirmed in imbalance-aware metrics.** Prequential Kappa-M and
-  Kappa-Temporal (from per-sample traces) are positive in all 9 cells. On the
-  degenerate reactive HAT/2017, Kappa-Temporal is −1.93 (worse than a persistence
-  classifier); the proactive arm improves it to −1.23 and lifts Kappa-M
-  0.58→0.68.
+- **Confirmed in imbalance-aware metrics.** Prequential Kappa-M (from per-sample
+  traces) is positive for both arms in all 9 cells, and the proactive arm
+  improves both Kappa-M and Kappa-Temporal in all 9. Kappa-Temporal itself is
+  negative only on the degenerate HAT/2017 cell: −1.93 reactive (worse than a
+  persistence classifier), improved to −1.23, with Kappa-M lifted 0.58→0.68.
 - **Mechanism check (event stratification).** Splitting real (class-fire) drifts
   into anticipated vs reactive-only: anticipated drifts recover with lower AUD on
   2017 (HAT p=0.037, ARF p=0.013, SRP p<0.001) and on UNSW (ARF p<0.001, SRP
-  p=0.016), but **not on 2018** (p≈0.94–0.99) — the first hint that the 2018 gain
+  p=0.016), but **not on 2018** (p≈0.94–0.99) nor for HAT on UNSW (p=1.00:
+  anticipated drifts there have the larger median AUD, 1528 vs 882) — the first hint that the 2018 gain
   is not anticipation. Monitor false-alarm rate is high (30–80%).
 
 ## Part B — The decisive frequency-matched control (new runs)

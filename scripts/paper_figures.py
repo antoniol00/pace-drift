@@ -1,18 +1,27 @@
-"""Publication-quality figures for the PACE results.
+"""Publication figures for the PACE paper.
 
-  fig1   local F1 across the stream    -> where the arms diverge, and by how much
-  fig3   anticipation evidence         -> lead-time distribution + cost/benefit
-  fig6   frequency control             -> a blind clock at PACE's own fire count
-  fig8   streaming SOTA context        -> ARF / SRP learning from every sample
-  fig9   monitor ablation in-pipeline  -> the signal behind the same policy
-  fig10  budget-matched SOTA           -> capacity vs continuous supervision
-  fig11  trigger x base learner        -> the trigger transfers to the ensembles
-  fig12  external validity             -> three datasets x three learners
-  fig13  timing vs frequency           -> the decomposition at matched count
-  fig15  closed-loop stability         -> per-seed collapse by trigger
-(fig4 resources and fig5 sensitivity live in scripts/reviewer_analysis.py.)
+  fig1   local F1 across the stream (CICIDS2017, HAT)
+  fig3   anticipation lead time per seed + memory vs final F1
+  fig6   frequency control: local F1 by segment and overall
+  fig9   monitor swapped inside the full pipeline
+  fig10  budget-matched ensembles vs continuous supervision
+  fig11  trigger x base learner (CICIDS2017)
+  fig12  trigger x base learner x dataset
+  fig13  reactive / blind clock / PACE at matched fire count
+  fig15  closed-loop stability, per-seed cumulative accuracy
+(fig4 resources and fig5 sensitivity live in scripts/reviewer_analysis.py,
+fig7 in scripts/monitor_ablation.py; all three reuse the style defined here.)
 
-Colours: Okabe-Ito (colour-blind safe by construction), one fixed hue per phase.
+Every figure is drawn at its printed size (FULL = \\textwidth, COL = \\columnwidth)
+with no titles and no commentary: the caption in the paper carries the message.
+`save` writes <name>.pdf/.png to OUT and, in OUT/variants, a grayscale print
+proof and one file per panel; each figure is also rendered once more with value
+labels (<name>_labels). Alternative forms of the key results (forest plots,
+collapse counts, the F1 gap) go to OUT/variants as well.
+
+Palette: one academic-blue hue in five lightness steps (validated as an ordinal
+ramp), plus two blue-greys for reference arms; hatching and markers carry
+identity in grayscale print.
 Run:  uv run python scripts/paper_figures.py
 """
 
@@ -26,59 +35,167 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+from matplotlib.transforms import Bbox
+from PIL import Image
 
 RUNS = Path("results/runs")
 REC = Path("results/recovery")
-OUT = Path("results/report/paper")
-OUT.mkdir(parents=True, exist_ok=True)
-SEEDS = [0, 1, 2, 3, 4]
+SEEDS = [0, 1, 2, 3, 4]  # cost and sensitivity analyses (reviewer_analysis, monitor_ablation)
+CORE = list(range(10))  # the ten seeds of the core, frequency, monitor and lead-time analyses
 
-# One fixed hue per phase (colour follows the entity, never the rank).
+# --------------------------------------------------------------------------- #
+# Style
+# --------------------------------------------------------------------------- #
+FULL, COL = 489.1 / 72.27, 235.5 / 72.27  # IEEEtran \textwidth, \columnwidth (pt -> in)
+
+BLUE = ["#8DB6DE", "#5B91C8", "#2E6AA6", "#1F4E79", "#0E2A47"]  # light -> dark
+ACC = BLUE[3]  # PACE and everything that is PACE's own (lead time, AE monitor)
+SLATE, SLATE_LT, EXTRA = "#44546A", "#8497B0", "#A6B2C3"  # blue-greys, reference arms
+PALE = "#EEF3FA"  # background bands only
+INK, MUTED = "#1A1A1A", "#7F7F7F"
+BOLD = {"fontweight": "bold"}
+
+OUT = Path("results/report/paper")
+VAR = OUT / "variants"
+VAR.mkdir(parents=True, exist_ok=True)
+
+# Colour follows the role of an arm, never its rank: reactive is mid blue, the
+# blind clock is light and hatched, PACE is the deep academic blue, continuous
+# supervision is a hatched blue-grey.
 COLOR = {
-    "B": "#0072B2",          # reactive Page-Hinkley -> blue (baseline)
-    "B_adwin": "#56B4E9",    # reactive ADWIN -> sky
-    "B_kswin": "#CC79A7",    # reactive KSWIN -> purple
-    "C_freq": "#D55E00",     # blind periodic clock -> vermillion
-    "C_early": "#009E73",    # PACE -> green
-    # Ensembles reuse the trigger's hue, muted, so a figure mixing base learners
-    # still reads "reactive vs proactive" at a glance.
-    "ARF_sched": "#4a90c4",
-    "SRP_sched": "#2e6f9e",
-    "ARF_early": "#4fbf9a",
-    "SRP_early": "#2f8f70",
+    "B": BLUE[1], "B_adwin": BLUE[1], "B_kswin": BLUE[1],
+    "C_freq": BLUE[0], "C_early": ACC,
+    "ARF_sched": BLUE[1], "SRP_sched": BLUE[1],
+    "ARF_early": ACC, "SRP_early": ACC,
+    "ARF": SLATE, "SRP": SLATE,
 }
+HATCH = {"B_adwin": "....", "B_kswin": "\\\\\\\\", "C_freq": "////", "ARF": "xxx", "SRP": "xxx"}
+LINESTYLE = {"B": "--", "C_freq": ":", "C_early": "-"}
+MARKER = {"B": "o", "B_adwin": "s", "B_kswin": "^", "C_freq": "D", "C_early": "o"}
 LABEL = {
-    "B": "reactive (Page-Hinkley)",
-    "B_adwin": "reactive (ADWIN)",
-    "B_kswin": "reactive (KSWIN)",
-    "C_freq": "blind periodic clock",
-    "C_early": "PACE (covariate-shift trigger)",
-    "ARF_sched": "ARF reactive",
-    "SRP_sched": "SRP reactive",
-    "ARF_early": "ARF + PACE",
-    "SRP_early": "SRP + PACE",
+    "B": "Reactive (PHT)", "B_adwin": "Reactive (ADWIN)", "B_kswin": "Reactive (KSWIN)",
+    "C_freq": "Blind clock", "C_early": "PACE",
+    "ARF_sched": "ARF reactive", "SRP_sched": "SRP reactive",
+    "ARF_early": "ARF + PACE", "SRP_early": "SRP + PACE",
+    "ARF": "ARF continuous", "SRP": "SRP continuous",
 }
 
 plt.rcParams.update(
     {
-        "figure.dpi": 300,
-        "savefig.dpi": 300,
-        "savefig.bbox": "tight",
-        "font.size": 11,
-        "font.family": "DejaVu Sans",
-        "axes.titlesize": 12,
-        "axes.titleweight": "bold",
-        "axes.labelsize": 11,
+        # 8 pt Times, the paper's own face under IEEEtran and what the template
+        # asks for in figure labels. STIX (bundled with matplotlib) is a Times
+        # design and sets the math, so symbols and exponents match the text;
+        # both are Unicode fonts, so the PDF text layer keeps the real glyphs.
+        "font.family": ["Times New Roman", "STIXGeneral"],
+        "mathtext.fontset": "stix",
+        "font.size": 8,
+        "axes.labelsize": 8,
+        "axes.titlesize": 8,
+        "xtick.labelsize": 8,
+        "ytick.labelsize": 8,
+        "legend.fontsize": 8,
+        "text.color": INK,
+        "axes.labelcolor": INK,
+        "axes.edgecolor": INK,
+        "xtick.color": INK,
+        "ytick.color": INK,
+        "axes.linewidth": 0.6,
+        "xtick.major.width": 0.6,
+        "ytick.major.width": 0.6,
+        "xtick.major.size": 2.5,
+        "ytick.major.size": 2.5,
         "axes.spines.top": False,
         "axes.spines.right": False,
         "axes.grid": True,
-        "grid.color": "#e6e6e6",
-        "grid.linewidth": 0.8,
+        "axes.grid.axis": "y",
+        "grid.color": "#E3E8EF",
+        "grid.linewidth": 0.5,
         "axes.axisbelow": True,
         "legend.frameon": False,
-        "legend.fontsize": 10,
+        "legend.handlelength": 1.6,
+        "lines.linewidth": 1.3,
+        "lines.markersize": 4,
+        "hatch.linewidth": 0.6,
+        "patch.linewidth": 0.5,
+        "figure.dpi": 150,
+        "savefig.dpi": 400,
+        "savefig.bbox": "tight",
+        "savefig.pad_inches": 0.02,
+        "pdf.fonttype": 42,  # embed TrueType, as publishers require
+        "ps.fonttype": 42,
     }
 )
+
+
+def bar_kw(phase: str) -> dict:
+    """Fill, hatch and white separating edge for one arm's bars."""
+    kw = {"color": COLOR[phase], "edgecolor": "white", "linewidth": 0.6}
+    if phase in HATCH:
+        kw["hatch"] = HATCH[phase]
+        kw["hatchcolor"] = BLUE[3] if COLOR[phase] == BLUE[0] else "white"
+    return kw
+
+
+def tag(ax, letter: str) -> None:
+    """Panel letter, the only text a figure carries besides axes and legend."""
+    ax.text(0.0, 1.02, f"({letter})", transform=ax.transAxes, ha="left", va="bottom",
+            gid="tag", **BOLD)
+
+
+def values(ax, xs, vals, fmt: str = "{:.2f}", dy: float = 1.5) -> None:
+    """Value labels above bars (labelled variants only)."""
+    for x, v in zip(xs, vals, strict=True):
+        ax.annotate(fmt.format(v), (x, v), xytext=(0, dy), textcoords="offset points",
+                    ha="center", va="bottom", fontsize=6.5)
+
+
+def fit_width(fig) -> Bbox:
+    """Crop box exactly as wide as the figure's nominal (print) width.
+
+    A tight crop follows the drawn content, so labels spilling past the canvas (or
+    an empty margin) change the saved width and LaTeX would rescale the figure,
+    and its 8 pt text with it. The canvas is stretched until the content fits the
+    nominal width (text stays fixed in points; only the axes absorb it), then the
+    crop is pinned to that width so small renderer differences cannot leak in.
+    """
+    target = fig.get_figwidth()
+    pad = plt.rcParams["savefig.pad_inches"]
+    for _ in range(4):
+        box = fig.get_tightbbox(fig.canvas.get_renderer()).padded(pad)
+        fig.set_figwidth(fig.get_figwidth() + target - box.width)
+    box = fig.get_tightbbox(fig.canvas.get_renderer()).padded(pad)
+    return Bbox.from_bounds(box.x0, box.y0, target, box.height)
+
+
+def save(fig, name: str, labels: bool = False, panels: tuple = ()) -> None:
+    """Write the figure, its grayscale proof and one file per panel."""
+    crop = fit_width(fig)
+    if labels:
+        for ext in ("pdf", "png"):
+            fig.savefig(VAR / f"{name}_labels.{ext}", bbox_inches=crop)
+        plt.close(fig)
+        return
+    for ext in ("pdf", "png"):
+        fig.savefig(OUT / f"{name}.{ext}", bbox_inches=crop)
+    Image.open(OUT / f"{name}.png").convert("L").save(VAR / f"{name}_gray.png")
+    renderer = fig.canvas.get_renderer()
+    for ax, letter in zip(panels, "abcd", strict=False):
+        tags = [t for t in ax.texts if t.get_gid() == "tag"]
+        for t in tags:
+            t.set_visible(False)
+        box = ax.get_tightbbox(renderer).transformed(fig.dpi_scale_trans.inverted())
+        for ext in ("pdf", "png"):
+            fig.savefig(VAR / f"{name}_{letter}.{ext}", bbox_inches=box.padded(0.04))
+        for t in tags:
+            t.set_visible(True)
+    plt.close(fig)
+    print(f"  wrote {name}")
+
+
+def kilo(ax) -> None:
+    """Stream positions on the x axis, one tick every 0.5M samples."""
+    ax.set_xticks(np.arange(0, 2.01e6, 0.5e6))
+    ax.xaxis.set_major_formatter(lambda v, _: f"{v / 1e6:.1f}M" if v else "0")
 
 
 # --------------------------------------------------------------------------- #
@@ -103,7 +220,7 @@ def load_trajectory(phase: str, bin_size: int = 50_000
     strategies actually diverge.
     """
     frames = []
-    for s in SEEDS:
+    for s in CORE:
         df = pd.read_parquet(RUNS / phase / f"seed_{s}" / "snapshots.parquet")
         d = df[df["valid"]]
         b = (d["index"] // bin_size).astype(int)
@@ -117,7 +234,7 @@ def load_trajectory(phase: str, bin_size: int = 50_000
 
 def load_leadtimes() -> dict[int, list[int]]:
     out = {}
-    for s in SEEDS:
+    for s in CORE:
         d = json.load(open(RUNS / "C_early" / f"seed_{s}" / "lead_time.json"))
         out[s] = d["lead_times"]
     return out
@@ -128,119 +245,10 @@ def parse_ci(s: str) -> tuple[float, float]:
     return float(lo), float(hi)
 
 
-# --------------------------------------------------------------------------- #
-# Figure 1 — F1 trajectory over the stream
-# --------------------------------------------------------------------------- #
-def fig1_trajectory() -> None:
-    fig, ax = plt.subplots(figsize=(11, 4.8))
-
-    lbl_dy = {"B": 9, "C_freq": -9, "C_early": 0}
-    for phase in ["B", "C_freq", "C_early"]:
-        idx, mean, std = load_trajectory(phase)
-        ax.fill_between(idx, mean - std, mean + std, color=COLOR[phase],
-                        alpha=0.12, lw=0, zorder=2)
-        ax.plot(idx, mean, color=COLOR[phase], lw=2.2, zorder=3,
-                label=LABEL[phase])
-        good = np.isfinite(mean)
-        ax.annotate(f"{mean[good][-1]:.2f}",
-                    (idx[good][-1], mean[good][-1]),
-                    xytext=(8, lbl_dy[phase]), textcoords="offset points",
-                    va="center", color=COLOR[phase], fontweight="bold",
-                    fontsize=10)
-
-    # shade the drift-dense second half where the strategies diverge
-    ax.axvspan(1.0e6, 2.05e6, color="#f2c7c0", alpha=0.18, zorder=0)
-    ax.annotate("drift-dense second half", (1.52e6, 0.05), ha="center",
-                va="bottom", fontsize=9, color="#b1553f", style="italic")
-
-    ax.set_xlabel("stream position (samples processed)")
-    ax.set_ylabel("local F1  (50K-sample bins, mean ± 1 s.d.)")
-    ax.set_title("Where detection quality holds — and where it diverges")
-    ax.set_ylim(0, 1.02)
-    ax.set_xlim(0, 2.05e6)
-    ax.xaxis.set_major_formatter(lambda v, _: f"{v/1e6:.1f}M" if v else "0")
-    ax.legend(loc="upper right", ncol=2)
-    txt = ("Easy stretch (~0.6–1.0M): every adaptive strategy is high, and adapting "
-           "on a blind clock is already the worst of the three.\nIn the drift-dense "
-           "second half the covariate-shift trigger holds F1 up over the reactive "
-           "baseline, while the blind clock falls well below it.")
-    ax.text(0.5, 1.11, txt, transform=ax.transAxes, ha="center", va="bottom",
-            fontsize=9, color="#555555")
-    fig.savefig(OUT / "fig1_f1_trajectory.png")
-    plt.close(fig)
-
-
-# --------------------------------------------------------------------------- #
-# Figure 2 — realistic recovery comparison
-# --------------------------------------------------------------------------- #
-def fig3_early(summ: pd.DataFrame) -> None:
-    fig, (axL, axR) = plt.subplots(1, 2, figsize=(12, 4.8),
-                                   gridspec_kw={"width_ratios": [1.1, 1]})
-
-    # -- left: lead-time distribution per seed + pooled --------------------
-    lts = load_leadtimes()
-    data = [np.array(lts[s]) / 1e3 for s in SEEDS]  # kilo-samples
-    parts = axL.violinplot(data, positions=SEEDS, showextrema=False, widths=0.8)
-    for b in parts["bodies"]:
-        b.set_facecolor(COLOR["C_early"])
-        b.set_alpha(0.25)
-        b.set_edgecolor("none")
-    bp = axL.boxplot(data, positions=SEEDS, widths=0.28, patch_artist=True,
-                     showfliers=False, medianprops=dict(color="white", lw=1.6),
-                     boxprops=dict(facecolor=COLOR["C_early"], edgecolor="none"),
-                     whiskerprops=dict(color=COLOR["C_early"]),
-                     capprops=dict(color=COLOR["C_early"]))
-    del bp
-    axL.axhline(0, color="#d55e00", lw=1.2, ls="--")
-    axL.annotate("class drift fires here (lead = 0)", (SEEDS[-1] + 0.05, 0),
-                 xytext=(0, 4), textcoords="offset points", ha="right",
-                 va="bottom", color="#d55e00", fontsize=8.5)
-    pooled = np.concatenate(data)
-    axL.axhline(pooled.mean(), color=COLOR["C_early"], lw=1.4, zorder=1)
-    axL.set_ylim(-1.2, 22)
-    axL.text(0.02, 0.97, f"pooled mean lead = {pooled.mean():.1f}K samples\n"
-             f"(all seeds strictly positive → genuine anticipation)",
-             transform=axL.transAxes, ha="left", va="top", fontsize=9,
-             fontweight="bold", color=COLOR["C_early"],
-             bbox=dict(boxstyle="round,pad=0.35", fc="white",
-                       ec=COLOR["C_early"], lw=1.0))
-    axL.set_xticks(SEEDS)
-    axL.set_xlabel("seed")
-    axL.set_ylabel("anticipation lead time  (thousands of samples)")
-    axL.set_title("A. The monitor fires *before* the drift")
-
-    # -- right: cost / benefit -- memory vs final F1 -----------------------
-    order = ["B", "B_adwin", "B_kswin", "C_freq", "C_early"]
-    off = {"B": (10, 8), "B_adwin": (10, -4), "B_kswin": (10, -12),
-           "C_freq": (10, 8), "C_early": (-12, 12)}
-    ha = {"C_early": "right"}
-    for ph in order:
-        sub = summ[summ.phase == ph]
-        if sub.empty:
-            continue
-        x = sub["peak_rss_mb"].mean()
-        y = sub["final_f1"].mean()
-        axR.scatter(x, y, s=170, color=COLOR[ph], edgecolor="white",
-                    linewidth=1.5, zorder=3)
-        axR.annotate(LABEL[ph].split(" (")[0], (x, y), xytext=off[ph],
-                     textcoords="offset points", ha=ha.get(ph, "left"),
-                     fontsize=9, fontweight="bold", color=COLOR[ph])
-    axR.set_xlabel("peak memory (MB)")
-    axR.set_ylabel("final F1")
-    axR.set_title("B. Cost vs benefit")
-    axR.set_ylim(0.3, 1.05)
-    axR.text(0.97, 0.30, "The monitor is a linear-algebra pass\nover a small "
-             "buffer: the accuracy it buys\ncosts memory, not throughput.",
-             transform=axR.transAxes, ha="right", va="top",
-             fontsize=8.5, color="#555")
-    fig.savefig(OUT / "fig3_early_detection.png")
-    plt.close(fig)
-
-
 def _local_f1_by_segment(phase: str, edges: list[float]) -> tuple[list, float]:
-    """Mean valid-window F1 in each [edge, edge) band, pooled across seeds."""
+    """Mean valid-window F1 in each [edge, edge) band, pooled across the core seeds."""
     rows = []
-    for s in SEEDS:
+    for s in CORE:
         df = pd.read_parquet(RUNS / phase / f"seed_{s}" / "snapshots.parquet")
         rows.append(df[df["valid"]][["index", "f1"]])
     d = pd.concat(rows)
@@ -267,8 +275,8 @@ def _cell_seeds(dataset: str, phase: str) -> list[int]:
     The cross-dataset figures must agree with `tier0_analysis` /
     `tier1_analysis`, which resolve seeds per cell rather than assuming one
     global count — cells were extended past the original five at different
-    times. The anchor-narrative figures keep using ``SEEDS``, since every arm
-    in those has exactly the original five.
+    times. The anchor-narrative figures use ``CORE``, the ten seeds every anchor
+    arm they show has completed.
     """
     d = _run_dir(dataset, phase, 0).parent
     return sorted(
@@ -276,6 +284,11 @@ def _cell_seeds(dataset: str, phase: str) -> list[int]:
         for p in d.glob("seed_*")
         if (p / "snapshots.parquet").exists() and (p / "summary.json").exists()
     )
+
+
+def _shared_seeds(dataset: str, *phases: str) -> list[int]:
+    """Seeds completed by every one of ``phases`` (paired comparisons)."""
+    return sorted(set.intersection(*(set(_cell_seeds(dataset, p)) for p in phases)))
 
 
 def _overall_local_f1(dataset: str, phase: str,
@@ -312,544 +325,474 @@ def _mean_n_drifts(dataset: str, phase: str,
     return float(np.mean(vals)) if vals else None
 
 
-def fig6_frequency_ablation() -> None:
-    """C_freq control: same adaptation count as C_early, blind periodic timing.
+# --------------------------------------------------------------------------- #
+# Figure 1 — local F1 across the stream
+# --------------------------------------------------------------------------- #
+def fig1_trajectory(labels: bool = False) -> None:
+    fig, ax = plt.subplots(figsize=(FULL, 2.3))
+    ax.axvspan(1.0e6, 2.05e6, color=PALE, lw=0, zorder=0)
+    for phase in ["B", "C_freq", "C_early"]:
+        idx, mean, std = load_trajectory(phase)
+        ax.fill_between(idx, mean - std, mean + std, color=COLOR[phase], alpha=0.12,
+                        lw=0, zorder=2)
+        ax.plot(idx, mean, color=COLOR[phase], ls=LINESTYLE[phase],
+                lw=1.6 if phase == "C_freq" else 1.3, zorder=3, label=LABEL[phase])
+        if labels:
+            good = np.isfinite(mean)
+            ax.annotate(f"{mean[good][-1]:.2f}", (idx[good][-1], mean[good][-1]),
+                        xytext=(4, 0), textcoords="offset points", va="center", fontsize=6.5)
+    ax.set_xlabel("Stream position (samples)")
+    ax.set_ylabel("Local F1")
+    ax.set_ylim(0, 1.02)
+    ax.set_xlim(0, 2.05e6)
+    kilo(ax)
+    ax.legend(loc="lower left", bbox_to_anchor=(0, 1.0), ncol=3, borderaxespad=0.2)
+    save(fig, "fig1_f1_trajectory", labels)
 
-    Answers 'C_early only wins because it retrains more often': at equal
-    frequency, blind timing is *worse than the reactive baseline*, so the gain
-    is about *when* it adapts, not *how often*.
-    """
-    edges = [0.5e6, 1.0e6, 1.5e6, 2.05e6]
-    seg_labels = ["0.5–1.0M\n(easy)", "1.0–1.5M\n(drift-dense)",
-                  "1.5–2.0M\n(drift-dense)"]
+
+def fig1_delta() -> None:
+    """Variant: the F1 gap to the reactive baseline, bin by bin."""
+    idx, mean, _ = load_trajectory("B")
+    ref = pd.Series(mean, index=idx)
+    fig, ax = plt.subplots(figsize=(FULL, 1.9))
+    ax.axvspan(1.0e6, 2.05e6, color=PALE, lw=0, zorder=0)
+    ax.axhline(0, color=MUTED, lw=0.7, zorder=1)
+    for phase in ["C_freq", "C_early"]:
+        idx, mean, _ = load_trajectory(phase)
+        gap = pd.Series(mean, index=idx) - ref
+        ax.plot(gap.index, gap.values, color=COLOR[phase], ls=LINESTYLE[phase],
+                lw=1.6 if phase == "C_freq" else 1.3, label=f"{LABEL[phase]} $-$ reactive")
+    ax.set_xlabel("Stream position (samples)")
+    ax.set_ylabel(r"$\Delta$ local F1")
+    ax.set_xlim(0, 2.05e6)
+    kilo(ax)
+    ax.legend(loc="lower left", bbox_to_anchor=(0, 1.0), ncol=2, borderaxespad=0.2)
+    for ext in ("pdf", "png"):
+        fig.savefig(VAR / f"fig1_delta.{ext}")
+    plt.close(fig)
+
+
+# --------------------------------------------------------------------------- #
+# Figure 3 — anticipation lead time and cost/benefit
+# --------------------------------------------------------------------------- #
+def fig3_early(summ: pd.DataFrame, labels: bool = False) -> None:
+    fig, (axL, axR) = plt.subplots(1, 2, figsize=(FULL, 2.4),
+                                   gridspec_kw={"width_ratios": [1.15, 1]})
+    fig.subplots_adjust(wspace=0.3)
+
+    lts = load_leadtimes()
+    data = [np.array(lts[s]) / 1e3 for s in CORE]  # kilo-samples
+    parts = axL.violinplot(data, positions=CORE, showextrema=False, widths=0.8)
+    for b in parts["bodies"]:
+        b.set_facecolor(ACC)
+        b.set_alpha(0.25)
+        b.set_edgecolor("none")
+    axL.boxplot(data, positions=CORE, widths=0.22, patch_artist=True, showfliers=False,
+                medianprops={"color": "white", "lw": 1.2},
+                boxprops={"facecolor": ACC, "edgecolor": "none"},
+                whiskerprops={"color": ACC, "lw": 0.8},
+                capprops={"color": ACC, "lw": 0.8})
+    axL.axhline(0, color=MUTED, lw=0.7, ls="--")
+    pooled = np.concatenate(data)
+    axL.axhline(pooled.mean(), color=BLUE[4], lw=0.8, ls=":")
+    if labels:
+        axL.annotate(f"mean {pooled.mean():.1f}K", (CORE[-1] + 0.45, pooled.mean()),
+                     xytext=(0, 2), textcoords="offset points", ha="right", va="bottom",
+                     fontsize=6.5)
+    axL.set_ylim(-1.2, 22)
+    axL.set_xticks(CORE)
+    axL.set_xlabel("Seed")
+    axL.set_ylabel(r"Lead time ($\times 10^3$ samples)")
+    tag(axL, "a")
+
+    # the core seeds (C_early has 20 for the comparator study)
+    for ph in ["B", "B_adwin", "B_kswin", "C_freq", "C_early"]:
+        sub = summ[(summ.phase == ph) & summ.seed.isin(CORE)]
+        if sub.empty:
+            continue
+        x, y = sub["peak_rss_mb"].mean(), sub["final_f1"].mean()
+        axR.scatter(x, y, s=34, marker=MARKER[ph], color=COLOR[ph], edgecolor=BLUE[4]
+                    if ph == "C_freq" else "white", linewidth=0.6, zorder=3, label=LABEL[ph])
+        if labels:
+            axR.annotate(f"{y:.2f}", (x, y), xytext=(5, 0), textcoords="offset points",
+                         va="center", fontsize=6.5)
+    axR.set_xlabel("Peak memory (MB)")
+    axR.set_ylabel("Final F1")
+    axR.set_ylim(0.3, 1.05)
+    axR.grid(axis="x")
+    axR.legend(loc="lower right", handletextpad=0.3)
+    tag(axR, "b")
+    save(fig, "fig3_early_detection", labels, (axL, axR))
+
+
+# --------------------------------------------------------------------------- #
+# Figure 6 — frequency control
+# --------------------------------------------------------------------------- #
+def fig6_frequency_ablation(labels: bool = False) -> None:
+    """C_freq control: same adaptation count as C_early, blind periodic timing."""
+    edges = [0, 0.5e6, 1.0e6, 1.5e6, 2.05e6]  # the first starts after the 50K pretraining
+    seg_labels = ["0–0.5M", "0.5–1.0M", "1.0–1.5M", "1.5–2.0M"]
     phases = ["B", "C_freq", "C_early"]
-    fig, (axL, axR) = plt.subplots(1, 2, figsize=(12, 4.8),
-                                   gridspec_kw={"width_ratios": [1.4, 1]})
+    fig, (axL, axR) = plt.subplots(1, 2, figsize=(FULL, 2.3),
+                                   gridspec_kw={"width_ratios": [1.6, 1]})
+    fig.subplots_adjust(wspace=0.25)
 
     seg = {p: _local_f1_by_segment(p, edges) for p in phases}
     x = np.arange(len(seg_labels))
-    w = 0.26
+    w = 0.27
     for i, p in enumerate(phases):
-        axL.bar(x + (i - 1) * w, seg[p][0], w, color=COLOR[p],
-                edgecolor="white", label=LABEL[p])
+        axL.bar(x + (i - 1) * w, seg[p][0], w, label=LABEL[p], **bar_kw(p))
+        if labels:
+            values(axL, x + (i - 1) * w, seg[p][0])
     axL.set_xticks(x)
-    axL.set_xticklabels(seg_labels, fontsize=9)
-    axL.set_ylabel("local F1 (mean valid window, 5 seeds)")
-    axL.set_title("A. Blind periodic adaptation collapses in the hard regions")
+    axL.set_xticklabels(seg_labels)
+    axL.set_xlabel("Stream segment (samples)")
+    axL.set_ylabel("Local F1")
     axL.set_ylim(0, 1.0)
     axL.legend(loc="upper right")
+    tag(axL, "a")
 
     overall = [seg[p][1] for p in phases]
-    axR.bar(np.arange(3), overall, width=0.6, color=[COLOR[p] for p in phases],
-            edgecolor="white")
-    for i, v in enumerate(overall):
-        axR.annotate(f"{v:.2f}", (i, v), xytext=(0, 3),
-                     textcoords="offset points", ha="center", fontweight="bold")
+    for i, p in enumerate(phases):
+        axR.bar(i, overall[i], 0.6, **bar_kw(p))
+    if labels:
+        values(axR, range(3), overall)
     axR.set_xticks(np.arange(3))
-    axR.set_xticklabels(["B\nreactive", "C_freq\nsame freq,\nblind timing",
-                         "C_early\ninformed\ntiming"], fontsize=9)
-    axR.set_ylabel("overall local F1")
-    axR.set_title("B. Frequency is not the driver — timing is")
-    axR.set_ylim(0, 0.85)
-    axR.text(0.5, 0.86, "C_freq matches C_early's adaptation count (~162) but on a\n"
-             "blind clock → below baseline B. The gain is *when*, not *how often*.",
-             transform=axR.transAxes, ha="center", va="top", fontsize=8.5,
-             color="#555")
-    fig.savefig(OUT / "fig6_frequency_ablation.png")
-    plt.close(fig)
+    axR.set_xticklabels([LABEL[p].replace(" (PHT)", "") for p in phases])
+    axR.set_ylabel("Overall local F1")
+    axR.set_ylim(0, 1.0)
+    tag(axR, "b")
+    save(fig, "fig6_frequency_ablation", labels, (axL, axR))
 
 
-def fig8_sota_baselines(summ: pd.DataFrame) -> None:
-    """Compare C_early against SOTA streaming baselines (Experiment #3).
+# --------------------------------------------------------------------------- #
+# Figure 9 — monitor swapped inside the pipeline
+# --------------------------------------------------------------------------- #
+MONITOR = {  # phase -> (label, colour)
+    "C_early": ("AE", ACC),
+    "C_early_pca": ("PCA", BLUE[2]),
+    "C_early_hdddm": ("HDDDM", BLUE[1]),
+    "C_early_d3": ("D3", BLUE[0]),
+    "C_early_mean": ("Mean\nshift", SLATE_LT),
+    "C_early_d3_sized": ("D3 nat.\nsized", SLATE),
+    "C_early_d3_native": ("D3 nat.\ndefault", EXTRA),
+}
 
-    Alternative drift detectors on the reactive HAT (B_adwin, B_kswin) and self-
-    adapting ensembles (ARF, SRP), on final F1 and overall local F1. Skipped
-    until the SOTA runs exist.
-    """
-    order = ["B", "B_adwin", "B_kswin", "ARF", "SRP", "C_early"]
-    if not all((RUNS / p / "seed_0" / "summary.json").exists() for p in order):
-        print("  (fig8 skipped — SOTA runs not present yet)")
-        return
-    pal = {"B": "#0072B2", "B_adwin": "#56B4E9", "B_kswin": "#CC79A7",
-           "ARF": "#E69F00", "SRP": "#D55E00", "C_early": "#009E73"}
+
+def fig9_monitor_pipeline(summ: pd.DataFrame, labels: bool = False) -> None:
+    """Final and sustained F1 with the AE replaced by PCA / mean-shift (core seeds)."""
+    order = ["C_early", "C_early_pca", "C_early_mean"]
     edges = [0, 0.5e6, 1.0e6, 1.5e6, 2.05e6]
-    # adaptation budget per phase (ARF/SRP self-adapt on *every* sample)
-    def budget(ph: str) -> str:
-        if ph in ("ARF", "SRP"):
-            return "~2M\n(cont.)"
-        nd = np.mean([json.loads((RUNS / ph / f"seed_{s}" / "summary.json").read_text())["n_drifts"]
-                      for s in SEEDS])
-        return f"{nd:.0f}\nadapts"
-    ticks = [f"{p}\n{budget(p)}" for p in order]
-
-    fig, (axL, axR) = plt.subplots(1, 2, figsize=(12.5, 5.1))
+    fig, (axL, axR) = plt.subplots(1, 2, figsize=(COL, 2.0))
+    fig.subplots_adjust(wspace=0.55)
     x = np.arange(len(order))
-    hatch = {"ARF": "//", "SRP": "//"}  # mark the continuous-supervision baselines
+    rng = np.random.default_rng(0)
+    final = []
     for i, ph in enumerate(order):
-        vals = summ.loc[summ.phase == ph, "final_f1"].values
-        axL.bar(i, vals.mean(), 0.62, color=pal[ph], alpha=0.9, edgecolor="white",
-                hatch=hatch.get(ph))
-        jit = (np.random.default_rng(0).random(len(vals)) - 0.5) * 0.2
-        axL.scatter(i + jit, vals, color="#222", s=16, zorder=3)
-        axL.annotate(f"{vals.mean():.2f}", (i, vals.mean()), xytext=(0, 3),
-                     textcoords="offset points", ha="center", fontsize=8.5,
-                     fontweight="bold")
-    axL.set_xticks(x)
-    axL.set_xticklabels(ticks, fontsize=8)
-    axL.set_ylabel("final F1 (bar = mean, dots = seeds)")
-    axL.set_title("A. Final detection quality vs SOTA")
-    axL.set_ylim(0, 1.08)
-
+        vals = summ.loc[(summ.phase == ph) & summ.seed.isin(CORE), "final_f1"].values
+        final.append(vals.mean())
+        axL.bar(i, vals.mean(), 0.62, color=MONITOR[ph][1], edgecolor="white")
+        axL.scatter(i + (rng.random(len(vals)) - 0.5) * 0.25, vals, color=INK, s=4,
+                    lw=0, zorder=3)
     overall = [_local_f1_by_segment(ph, edges)[1] for ph in order]
-    axR.bar(x, overall, 0.62, color=[pal[p] for p in order], edgecolor="white",
-            hatch=[hatch.get(p, "") for p in order])
-    for i, v in enumerate(overall):
-        axR.annotate(f"{v:.2f}", (i, v), xytext=(0, 3), textcoords="offset points",
-                     ha="center", fontsize=8.5, fontweight="bold")
-    axR.set_xticks(x)
-    axR.set_xticklabels(ticks, fontsize=8)
-    axR.set_ylabel("overall local F1 (mean valid window)")
-    axR.set_title("B. Sustained quality vs SOTA")
-    axR.set_ylim(0, max(overall) * 1.25)
-    fig.text(0.5, 0.005, "ARF / SRP (hatched) learn on EVERY sample — ~2M supervised "
-             "updates — vs 160–340 triggered adaptations for B / C_early. The SOTA "
-             "lead is real but NOT budget-matched; alternative detectors (ADWIN/KSWIN) "
-             "do not beat plain PHT.", ha="center", va="bottom", fontsize=8.5,
-             color="#555")
-    fig.subplots_adjust(bottom=0.28)
-    fig.savefig(OUT / "fig8_sota_baselines.png")
-    plt.close(fig)
-    print("  wrote fig8_sota_baselines.png")
-
-
-def fig9_monitor_pipeline(summ: pd.DataFrame) -> None:
-    """#2 confirmation in the full pipeline: does a cheap monitor match the AE?
-
-    Runs the C_early pipeline with the autoencoder replaced by the mean-shift and
-    PCA monitors (calibrated to the AE's fire count). If final/local F1 match, the
-    generative monitor is not needed. Skipped until the variant runs exist.
-    """
-    order = ["C_early", "C_early_mean", "C_early_pca"]
-    if not all((RUNS / p / "seed_0" / "summary.json").exists() for p in order):
-        print("  (fig9 skipped — C_early monitor variants not present yet)")
-        return
-    labels = {"C_early": "AE\n(generative)", "C_early_mean": "mean-shift\n(trivial)",
-              "C_early_pca": "PCA recon\n(linear)"}
-    pal = {"C_early": "#009E73", "C_early_mean": "#999999", "C_early_pca": "#0072B2"}
-    edges = [0, 0.5e6, 1.0e6, 1.5e6, 2.05e6]
-
-    fig, (axL, axR) = plt.subplots(1, 2, figsize=(11.5, 5.0))
-    x = np.arange(len(order))
-    for i, ph in enumerate(order):
-        vals = summ.loc[summ.phase == ph, "final_f1"].values
-        axL.bar(i, vals.mean(), 0.6, color=pal[ph], edgecolor="white")
-        axL.scatter(i + (np.random.default_rng(0).random(len(vals)) - 0.5) * 0.2,
-                    vals, color="#222", s=16, zorder=3)
-        axL.annotate(f"{vals.mean():.3f}", (i, vals.mean()), xytext=(0, 3),
-                     textcoords="offset points", ha="center", fontsize=9, fontweight="bold")
-    axL.set_xticks(x)
-    axL.set_xticklabels([labels[p] for p in order], fontsize=9)
-    axL.set_ylabel("final F1 (bar = mean, dots = seeds)")
-    axL.set_title("A. Final F1 (monitor swapped in pipeline)", fontsize=11)
-    axL.set_ylim(0, 1.08)
-
-    overall = [_local_f1_by_segment(ph, edges)[1] for ph in order]
-    axR.bar(x, overall, 0.6, color=[pal[p] for p in order], edgecolor="white")
-    for i, v in enumerate(overall):
-        axR.annotate(f"{v:.3f}", (i, v), xytext=(0, 3), textcoords="offset points",
-                     ha="center", fontsize=9, fontweight="bold")
-    axR.set_xticks(x)
-    axR.set_xticklabels([labels[p] for p in order], fontsize=9)
-    axR.set_ylabel("overall local F1")
-    axR.set_title("B. Sustained F1 (AE ≈ PCA ≫ mean-shift)", fontsize=11)
-    axR.set_ylim(0, max(overall) * 1.25)
-    fig.text(0.5, 0.005, "In the full pipeline a linear PCA monitor nearly matches the "
-             "autoencoder (0.97 vs 0.99 final); a trivial mean-shift is clearly worse.\n"
-             "A reconstruction signal is needed — but the generative/non-linear model is "
-             "over-engineered: cheap PCA suffices.", ha="center", va="bottom",
-             fontsize=8.5, color="#555")
-    fig.subplots_adjust(bottom=0.30)
-    fig.savefig(OUT / "fig9_monitor_pipeline.png")
-    plt.close(fig)
-    print("  wrote fig9_monitor_pipeline.png")
-
-
-def fig10_budget_matched(summ: pd.DataFrame) -> None:
-    """#3b: is the SOTA lead model capacity or continuous supervision?
-
-    ARF/SRP restricted to the same triggered schedule as B (budget-matched)
-    vs their continuous-learning selves. Skipped until the _sched runs exist.
-    """
-    order = ["B", "C_early", "ARF_sched", "SRP_sched", "ARF", "SRP"]
-    if not all((RUNS / p / "seed_0" / "summary.json").exists() for p in order):
-        print("  (fig10 skipped — budget-matched SOTA runs not present yet)")
-        return
-    pal = {"B": "#0072B2", "C_early": "#009E73", "ARF_sched": "#E69F00",
-           "SRP_sched": "#D55E00", "ARF": "#E69F00", "SRP": "#D55E00"}
-    hatch = {"ARF": "//", "SRP": "//"}
-    edges = [0, 0.5e6, 1.0e6, 1.5e6, 2.05e6]
-
-    def bud(ph: str) -> str:
-        if ph in ("ARF", "SRP"):
-            return "~2M cont."
-        nd = np.mean([json.loads((RUNS / ph / f"seed_{s}" / "summary.json").read_text())["n_drifts"]
-                      for s in SEEDS])
-        return f"{nd:.0f} adapts"
-    ticks = [f"{p}\n{bud(p)}" for p in order]
-
-    fig, ax = plt.subplots(figsize=(11, 5.0))
-    x = np.arange(len(order))
-    overall = [_local_f1_by_segment(ph, edges)[1] for ph in order]
-    ax.bar(x, overall, 0.62, color=[pal[p] for p in order], edgecolor="white",
-           hatch=[hatch.get(p, "") for p in order])
-    for i, v in enumerate(overall):
-        ax.annotate(f"{v:.2f}", (i, v), xytext=(0, 3), textcoords="offset points",
-                    ha="center", fontsize=9.5, fontweight="bold")
-    ax.set_xticks(x)
-    ax.set_xticklabels(ticks, fontsize=9)
-    ax.set_ylabel("overall local F1 (mean valid window, 5 seeds)")
-    ax.set_title("Budget-matched SOTA: is the lead model capacity or continuous supervision?")
-    ax.set_ylim(0, max(overall) * 1.2)
-    ax.text(0.5, 1.13, "Same schedule as B (~233 triggered adaptations): does a stronger "
-            "model alone win? | Hatched = continuous (~2M).\nThe drop from continuous to "
-            "budget-matched isolates the value of full supervision.",
-            transform=ax.transAxes, ha="center", va="bottom", fontsize=9, color="#555")
-    fig.subplots_adjust(top=0.80, bottom=0.16)
-    fig.savefig(OUT / "fig10_budget_matched.png")
-    plt.close(fig)
-    print("  wrote fig10_budget_matched.png")
-
-
-def fig11_early_ensemble() -> None:
-    """#3c: does the proactive early trigger help the SOTA base learner, or only HAT?
-
-    The base-learner x trigger 2x2 (reactive vs proactive early detection) on
-    overall local F1. Skipped until ARF_early / SRP_early exist.
-    """
-    # (base-learner label, reactive phase, proactive-early phase)
-    rows = [("HAT", "B", "C_early"), ("ARF", "ARF_sched", "ARF_early"),
-            ("SRP", "SRP_sched", "SRP_early")]
-    needed = {p for _, r, e in rows for p in (r, e)}
-    if not all((RUNS / p / "seed_0" / "summary.json").exists() for p in needed):
-        print("  (fig11 skipped — ARF_early/SRP_early not present yet)")
-        return
-    edges = [0, 0.5e6, 1.0e6, 1.5e6, 2.05e6]
-    ov = {p: _local_f1_by_segment(p, edges)[1] for p in needed}
-
-    fig, ax = plt.subplots(figsize=(9.5, 5.0))
-    x = np.arange(len(rows))
-    w = 0.38
-    for i, (_base, r, e) in enumerate(rows):
-        ax.bar(i - w / 2, ov[r], w, color="#b0b0b0", edgecolor="white",
-               label="reactive trigger" if i == 0 else None)
-        ax.bar(i + w / 2, ov[e], w, color="#009E73", edgecolor="white",
-               label="proactive early trigger" if i == 0 else None)
-        for xi, ph in ((i - w / 2, r), (i + w / 2, e)):
-            ax.annotate(f"{ov[ph]:.2f}", (xi, ov[ph]), xytext=(0, 3),
-                        textcoords="offset points", ha="center", fontsize=9,
-                        fontweight="bold")
-        d = ov[e] - ov[r]
-        ax.annotate(f"{'+' if d >= 0 else ''}{d:.2f}", (i, max(ov[r], ov[e])),
-                    xytext=(0, 20), textcoords="offset points", ha="center",
-                    fontsize=10, fontweight="bold",
-                    color="#009E73" if d >= 0 else "#d55e00")
-    ax.set_xticks(x)
-    ax.set_xticklabels([b for b, _, _ in rows], fontsize=11)
-    ax.set_xlabel("base learner")
-    ax.set_ylabel("overall local F1 (mean valid window, 5 seeds)")
-    ax.set_title("Does proactive early detection help the base learner?")
-    ax.set_ylim(0, max(ov.values()) * 1.25)
-    ax.legend(loc="upper left")
-    ax.text(0.5, 1.10, "Δ above each pair = gain from swapping reactive → proactive "
-            "early trigger, holding the model fixed.\nIf the ensemble Δ is positive, "
-            "the anticipation idea improves the SOTA model, not just the weak HAT.",
-            transform=ax.transAxes, ha="center", va="bottom", fontsize=9, color="#555")
-    fig.subplots_adjust(top=0.82)
-    fig.savefig(OUT / "fig11_early_ensemble.png")
-    plt.close(fig)
-    print("  wrote fig11_early_ensemble.png")
-
-
-def fig12_external_validity() -> None:
-    """#4: does the proactive early trigger generalize across datasets?
-
-    Replicates fig11's base-learner x trigger 2x2 (reactive `*_sched`/B vs
-    proactive `*_early`) per dataset (CICIDS2017 anchor, CICIDS2018, UNSW-NB15).
-    Cells with no completed runs are skipped — the bar / delta annotation is
-    simply not drawn.
-
-    Each cell is restricted to the seeds its *two* arms share, matching how
-    `tier0_analysis` pairs them. Without that, an arm that was extended further
-    than its partner (C_early runs to 20 seeds for the comparator experiment)
-    would be summarised over a different, larger sample than the arm it is
-    plotted against, and the bars would not correspond to the reported deltas.
-    """
-    datasets = ["cicids2017", "cicids2018", "unsw"]
-    dset_label = {"cicids2017": "CIC-IDS2017", "cicids2018": "CIC-IDS2018",
-                  "unsw": "UNSW-NB15"}
-    learners = [("HAT", "B", "C_early"), ("ARF", "ARF_sched", "ARF_early"),
-                ("SRP", "SRP_sched", "SRP_early")]
-
-    f1_ov: dict[tuple[str, str], float | None] = {}
-    n_drifts: dict[tuple[str, str], float | None] = {}
-    for ds in datasets:
-        for _base, r, e in learners:
-            shared = sorted(set(_cell_seeds(ds, r)) & set(_cell_seeds(ds, e)))
-            for p in (r, e):
-                f1_ov[(ds, p)] = _overall_local_f1(ds, p, shared)
-                n_drifts[(ds, p)] = _mean_n_drifts(ds, p, shared)
-    if not any(v is not None for v in f1_ov.values()):
-        print("  (fig12 skipped — no cross-dataset runs present yet)")
-        return
-
-    fig, axes = plt.subplots(1, len(datasets), figsize=(13.5, 5.0), sharey=True)
-    w = 0.36
-    # label each series exactly once, in whichever axis first has data for it
-    reactive_labeled = proactive_labeled = False
-    legend_ax = None
-    for ax, ds in zip(axes, datasets, strict=False):
-        x = np.arange(len(learners))
-        drew_any = False
-        for i, (_base, r, e) in enumerate(learners):
-            fr, fe = f1_ov[(ds, r)], f1_ov[(ds, e)]
-            if fr is not None:
-                lbl = None
-                if not reactive_labeled:
-                    lbl, reactive_labeled, legend_ax = "reactive trigger", True, ax
-                ax.bar(i - w / 2, fr, w, color="#b0b0b0", edgecolor="white", label=lbl)
-                ax.annotate(f"{fr:.2f}", (i - w / 2, fr), xytext=(0, 3),
-                            textcoords="offset points", ha="center", fontsize=8.5,
-                            fontweight="bold")
-                drew_any = True
-            if fe is not None:
-                lbl = None
-                if not proactive_labeled:
-                    lbl, proactive_labeled, legend_ax = "proactive early trigger", True, ax
-                ax.bar(i + w / 2, fe, w, color="#009E73", edgecolor="white", label=lbl)
-                ax.annotate(f"{fe:.2f}", (i + w / 2, fe), xytext=(0, 3),
-                            textcoords="offset points", ha="center", fontsize=8.5,
-                            fontweight="bold")
-                drew_any = True
-            if fr is not None and fe is not None:
-                d = fe - fr
-                ax.annotate(f"{'+' if d >= 0 else ''}{d:.2f}", (i, max(fr, fe)),
-                            xytext=(0, 16), textcoords="offset points", ha="center",
-                            fontsize=9, fontweight="bold",
-                            color="#009E73" if d >= 0 else "#d55e00")
+    axR.bar(x, overall, 0.62, color=[MONITOR[p][1] for p in order], edgecolor="white")
+    if labels:
+        values(axL, x, final, "{:.3f}")
+        values(axR, x, overall, "{:.3f}")
+    for ax, ylab, letter in ((axL, "Final F1", "a"), (axR, "Overall local F1", "b")):
         ax.set_xticks(x)
-        ax.set_xticklabels([b for b, _, _ in learners], fontsize=10)
-        ax.set_title(dset_label[ds], fontsize=11)
-        ax.set_xlabel("base learner")
-        if not drew_any:
-            ax.text(0.5, 0.5, "runs pending", transform=ax.transAxes, ha="center",
-                    va="center", fontsize=10, color="#999999", style="italic")
-    if legend_ax is not None:
-        legend_ax.legend(loc="upper left", fontsize=8)
-    axes[0].set_ylabel("overall local F1 (mean valid window, 5 seeds)")
-    present = [v for v in f1_ov.values() if v is not None]
-    ymax = max(present) * 1.25 if present else 1.0
-    for ax in axes:
-        ax.set_ylim(0, ymax)
-    fig.suptitle("Does the proactive early trigger generalize across datasets?",
-                 fontsize=12, fontweight="bold")
-    fig.text(0.5, 0.01, "Δ above each pair = gain from swapping reactive -> proactive "
-             "early trigger, holding the model fixed.\nPositive in all 9 cells "
-             "(3 datasets x 3 base learners): the anticipation signal generalizes.",
-             ha="center", va="bottom", fontsize=8.5, color="#555")
-    fig.subplots_adjust(top=0.80, bottom=0.20)
-    fig.savefig(OUT / "fig12_external_validity.png")
-    plt.close(fig)
-    print("  wrote fig12_external_validity.png")
-
-    # -- printed cross-dataset summary table (feeds the doc write-up) -------
-    print("\ncross-dataset summary (mean overall local F1, mean n_drifts):")
-    header = f"{'dataset':<12} {'phase':<10} {'overall_f1':>10} {'n_drifts':>10}"
-    print(header)
-    print("-" * len(header))
-    for ds in datasets:
-        for phase in sorted({p for _, r, e in learners for p in (r, e)}):
-            f1, nd = f1_ov[(ds, phase)], n_drifts[(ds, phase)]
-            if f1 is None and nd is None:
-                continue
-            f1s = f"{f1:.3f}" if f1 is not None else "n/a"
-            nds = f"{nd:.1f}" if nd is not None else "n/a"
-            print(f"{ds:<12} {phase:<10} {f1s:>10} {nds:>10}")
+        ax.set_xticklabels([MONITOR[p][0] for p in order])
+        ax.set_ylabel(ylab)
+        ax.set_ylim(0, 1.05)
+        tag(ax, letter)
+    save(fig, "fig9_monitor_pipeline", labels, (axL, axR))
 
 
-def fig13_timing_vs_frequency() -> None:
-    """Tier 1: on the external datasets, is the ensemble gain *when* or *how often*?
+# --------------------------------------------------------------------------- #
+# Figure 10 — budget-matched ensembles vs continuous supervision
+# --------------------------------------------------------------------------- #
+def fig10_budget_matched(labels: bool = False) -> None:
+    """HAT arms, ARF/SRP on the reactive schedule (233 adaptations), ARF/SRP continuous."""
+    order = ["B", "C_early", "ARF_sched", "SRP_sched", "ARF", "SRP"]
+    ticks = ["HAT\nreactive", "HAT\nPACE", "ARF\nmatched", "SRP\nmatched",
+             "ARF\ncontin.", "SRP\ncontin."]
+    hat = _shared_seeds("cicids2017", "B", "C_early")
+    f1 = [_overall_local_f1("cicids2017", p, hat if p in ("B", "C_early") else None)
+          for p in order]
+    print("  fig10 local F1:", dict(zip(order, np.round(f1, 3), strict=True)))
+    fig, ax = plt.subplots(figsize=(COL, 2.1))
+    x = np.arange(len(order))
+    for i, p in enumerate(order):
+        ax.bar(i, f1[i], 0.62, **bar_kw(p))
+    if labels:
+        values(ax, x, f1)
+    ax.set_xticks(x)
+    ax.set_xticklabels(ticks)
+    ax.set_ylabel("Overall local F1")
+    ax.set_ylim(0, 1.0)
+    save(fig, "fig10_budget_matched", labels)
 
-    Three arms at comparable adaptation frequency per decisive cell (ARF/SRP on
-    CIC-IDS2018 and UNSW-NB15): reactive schedule, blind periodic (`*_freq`, fire
-    count matched to `*_early`), and informed proactive (`*_early`). The timing
-    component `early - freq` (same count, informed vs blind placement) is the
-    clean test. Skipped until the `*_freq` runs exist.
-    """
-    # (dataset, learner label, reactive, frequency-control, proactive)
-    cells = [("cicids2018", "ARF"), ("cicids2018", "SRP"),
-             ("unsw", "ARF"), ("unsw", "SRP")]
-    phases = {"sched": "{L}_sched", "freq": "{L}_freq", "early": "{L}_early"}
-    vals: dict[tuple, dict] = {}
-    for ds, learner in cells:
-        cell = {}
-        for arm, tmpl in phases.items():
-            cell[arm] = _per_seed_local_f1(ds, tmpl.format(L=learner))
-        vals[(ds, learner)] = cell
-    if not any(c["freq"] is not None for c in vals.values()):
-        print("  (fig13 skipped — *_freq runs not present yet)")
-        return
 
-    dset_label = {"cicids2018": "CIC-IDS2018", "unsw": "UNSW-NB15"}
-    pal = {"sched": "#b0b0b0", "freq": "#E69F00", "early": "#009E73"}
-    arm_label = {"sched": "reactive", "freq": "blind, matched freq", "early": "informed timing"}
-    fig, ax = plt.subplots(figsize=(11, 5.2))
-    x = np.arange(len(cells))
-    w = 0.26
-    labelled = set()
-    for j, arm in enumerate(("sched", "freq", "early")):
-        for i, (ds, learner) in enumerate(cells):
-            v = vals[(ds, learner)][arm]
+# --------------------------------------------------------------------------- #
+# Figures 11/12 — trigger x base learner (x dataset)
+# --------------------------------------------------------------------------- #
+LEARNERS = [("HAT", "B", "C_early"), ("ARF", "ARF_sched", "ARF_early"),
+            ("SRP", "SRP_sched", "SRP_early")]
+DSET = {"cicids2017": "CIC-IDS2017", "cicids2018": "CIC-IDS2018", "unsw": "UNSW-NB15"}
+
+
+def _pairs(dataset: str) -> list[tuple[float | None, float | None]]:
+    """(reactive, PACE) overall local F1 per learner, on the seeds both arms share."""
+    out = []
+    for _base, r, e in LEARNERS:
+        shared = _shared_seeds(dataset, r, e)
+        out.append((_overall_local_f1(dataset, r, shared) if shared else None,
+                    _overall_local_f1(dataset, e, shared) if shared else None))
+    return out
+
+
+def _pair_bars(ax, pairs, labels: bool, legend: bool) -> None:
+    w = 0.38
+    for i, (fr, fe) in enumerate(pairs):
+        for xi, v, ph, lbl in ((i - w / 2, fr, "B", "Reactive"), (i + w / 2, fe, "C_early", "PACE")):
             if v is None:
                 continue
-            lbl = arm_label[arm] if arm not in labelled else None
-            labelled.add(arm)
-            ax.bar(i + (j - 1) * w, v.mean(), w, color=pal[arm], edgecolor="white",
-                   label=lbl, hatch="//" if arm == "freq" else None)
-            ax.annotate(f"{v.mean():.2f}", (i + (j - 1) * w, v.mean()),
-                        xytext=(0, 2), textcoords="offset points", ha="center",
-                        fontsize=8)
-    # timing delta (early - freq), paired by seed, annotated above each group
-    for i, (ds, learner) in enumerate(cells):
-        e, f = vals[(ds, learner)]["early"], vals[(ds, learner)]["freq"]
-        if e is None or f is None:
-            continue
-        d = float((e - f).mean())
-        top = max(e.mean(), f.mean(), vals[(ds, learner)]["sched"].mean())
-        ax.annotate(f"timing {'+' if d >= 0 else ''}{d:.3f}", (i, top),
-                    xytext=(0, 16), textcoords="offset points", ha="center",
-                    fontsize=9, fontweight="bold",
-                    color="#009E73" if d > 0.01 else "#777777")
-    ax.set_xticks(x)
-    ax.set_xticklabels([f"{dset_label[ds]}\n{learner}" for ds, learner in cells],
-                       fontsize=9)
-    ax.set_ylabel("overall local F1 (mean valid window, 5 seeds)")
-    ax.set_title("At matched adaptation frequency: is the gain timing or frequency?")
-    present = [v[a].mean() for v in vals.values() for a in ("sched", "freq", "early")
-               if v[a] is not None]
-    ax.set_ylim(0, max(present) * 1.2)
-    ax.legend(loc="lower right", fontsize=9)
-    ax.text(0.5, 1.12, "Timing = early − freq (same fire count, informed vs blind "
-            "placement). CIC-IDS2018: informed timing wins and blind-more even "
-            "*hurts*.\nUNSW: timing ≈ 0 — the gain there is frequency. The split "
-            "tracks drift structure, consistent across ARF and SRP.",
-            transform=ax.transAxes, ha="center", va="bottom", fontsize=8.5,
-            color="#555")
-    fig.subplots_adjust(top=0.80)
-    fig.savefig(OUT / "fig13_timing_vs_frequency.png")
+            ax.bar(xi, v, w, label=lbl if (legend and i == 0) else None, **bar_kw(ph))
+            if labels:
+                values(ax, [xi], [v])
+        if labels and fr is not None and fe is not None:
+            ax.annotate(f"{fe - fr:+.3f}", (i, max(fr, fe)), xytext=(0, 10),
+                        textcoords="offset points", ha="center", fontsize=6.5, **BOLD)
+    ax.set_xticks(np.arange(len(LEARNERS)))
+    ax.set_xticklabels([b for b, _, _ in LEARNERS])
+    ax.set_ylim(0, 1.08 if labels else 1.0)
+
+
+def fig11_early_ensemble(labels: bool = False) -> None:
+    fig, ax = plt.subplots(figsize=(COL, 2.0))
+    _pair_bars(ax, _pairs("cicids2017"), labels, legend=True)
+    ax.set_xlabel("Base learner")
+    ax.set_ylabel("Overall local F1")
+    ax.legend(loc="upper left", ncol=2)
+    save(fig, "fig11_early_ensemble", labels)
+
+
+def fig12_external_validity(labels: bool = False) -> None:
+    datasets = list(DSET)
+    fig, axes = plt.subplots(1, 3, figsize=(FULL, 2.2), sharey=True)
+    fig.subplots_adjust(wspace=0.08)
+    for k, (ax, ds) in enumerate(zip(axes, datasets, strict=True)):
+        pairs = _pairs(ds)
+        print(f"  fig12 {ds}:", [(round(a, 3), round(b, 3)) for a, b in pairs if a and b])
+        _pair_bars(ax, pairs, labels, legend=k == 0)
+        ax.set_xlabel(DSET[ds])
+    axes[0].set_ylabel("Overall local F1")
+    axes[0].legend(loc="upper left", ncol=2)
+    save(fig, "fig12_external_validity", labels)
+
+
+def fig12_forest() -> None:
+    """Variant: per-cell paired difference with its 95% CI, plus the aggregate."""
+    from tier0_analysis import paired_ci, section_a
+
+    rows = section_a()
+    fig, ax = plt.subplots(figsize=(COL, 2.6))
+    marker = {"HAT": "o", "ARF": "s", "SRP": "D"}
+    y, ticks, pos = 0.0, [], []
+    for i, r in enumerate(rows):
+        if i and r.dataset != rows[i - 1].dataset:
+            y += 0.6
+        ax.plot([r.t_lo, r.t_hi], [y, y], color=ACC, lw=1.0)
+        ax.scatter(r.mean_delta, y, marker=marker[r.learner], s=18, color=ACC,
+                   edgecolor="white", linewidth=0.5, zorder=3)
+        ticks.append(f"{DSET[r.dataset]}  {r.learner}")
+        pos.append(y)
+        y += 1
+    cell = np.array([r.mean_delta for r in rows])
+    lo, hi = paired_ci(cell)
+    y += 0.6
+    ax.plot([lo, hi], [y, y], color=BLUE[4], lw=1.6)
+    ax.scatter(cell.mean(), y, marker="D", s=30, color=BLUE[4], zorder=3)
+    ticks.append("Aggregate (9 cells)")
+    pos.append(y)
+    ax.axvline(0, color=MUTED, lw=0.7, ls="--")
+    ax.set_yticks(pos)
+    ax.set_yticklabels(ticks)
+    ax.invert_yaxis()
+    ax.grid(axis="y", visible=False)
+    ax.grid(axis="x")
+    ax.set_xlabel(r"$\Delta$ local F1, PACE $-$ reactive (95% CI)")
+    for ext in ("pdf", "png"):
+        fig.savefig(VAR / f"fig12_forest.{ext}")
     plt.close(fig)
-    print("  wrote fig13_timing_vs_frequency.png")
 
 
-def fig15_closed_loop_stability() -> None:
-    """Per-seed cumulative accuracy by monitor — the closed-loop stability view.
+# --------------------------------------------------------------------------- #
+# Figure 13 — timing vs frequency at matched count
+# --------------------------------------------------------------------------- #
+CELLS13 = [("cicids2018", "ARF"), ("cicids2018", "SRP"), ("unsw", "ARF"), ("unsw", "SRP")]
+ARMS13 = [("sched", "B", "Reactive"), ("freq", "C_freq", "Blind clock"), ("early", "C_early", "PACE")]
 
-    The comparator result is about *dispersion*, not central tendency: the arms
-    are bimodal, so a bar of means hides exactly what matters. Every seed is
-    therefore drawn as its own point, with the collapse band shaded. Two
-    monitors with indistinguishable detection metrics land in visibly different
-    places here, which is the argument the figure has to carry.
+
+def two_level_ticks(ax, cells) -> None:
+    """Learner under each group, dataset centred under its learners."""
+    ax.set_xticks(np.arange(len(cells)), [learner for _, learner in cells])
+    names = list(dict.fromkeys(ds for ds, _ in cells))
+    centres = [np.mean([i for i, (ds, _) in enumerate(cells) if ds == n]) for n in names]
+    ax.set_xticks(centres, [DSET[n] for n in names], minor=True)
+    ax.tick_params(axis="x", which="minor", length=0, pad=15)
+
+
+def fig13_timing_vs_frequency(labels: bool = False) -> None:
+    """ARF/SRP on CIC-IDS2018 and UNSW-NB15: reactive, blind clock at PACE's count, PACE."""
+    vals = {}
+    for ds, learner in CELLS13:
+        phases = [f"{learner}_{a}" for a, _, _ in ARMS13]
+        seeds = _shared_seeds(ds, *phases)
+        vals[(ds, learner)] = [_per_seed_local_f1(ds, p, seeds) for p in phases]
+    fig, ax = plt.subplots(figsize=(COL, 2.1))
+    w = 0.26
+    for j, (_arm, style, lbl) in enumerate(ARMS13):
+        xs = np.arange(len(CELLS13)) + (j - 1) * w
+        means = [vals[c][j].mean() for c in CELLS13]
+        ax.bar(xs, means, w, label=lbl, **bar_kw(style))
+    if labels:  # the timing component only: per-bar values collide at this width
+        for i, c in enumerate(CELLS13):
+            d = float((vals[c][2] - vals[c][1]).mean())
+            ax.annotate(f"{d:+.3f}", (i, max(v.mean() for v in vals[c])), xytext=(0, 9),
+                        textcoords="offset points", ha="center", fontsize=6.5, **BOLD)
+    two_level_ticks(ax, CELLS13)
+    ax.set_ylabel("Overall local F1")
+    ax.set_ylim(0, 1.08 if labels else 1.0)
+    ax.legend(loc="lower left", ncol=3, bbox_to_anchor=(0, 1.0), borderaxespad=0.2,
+              handlelength=1.2, columnspacing=1.0)
+    save(fig, "fig13_timing_vs_frequency", labels)
+
+
+def fig13_forest() -> None:
+    """Variant: the frequency and timing components with paired 95% CIs."""
+    from tier1_analysis import paired_ci
+
+    fig, ax = plt.subplots(figsize=(COL, 1.9))
+    comp = [("Frequency (clock $-$ reactive)", 1, 0, "s", SLATE_LT, -0.14),
+            ("Timing (PACE $-$ clock)", 2, 1, "o", ACC, 0.14)]
+    for name, a, b, mk, col, dy in comp:
+        for i, (ds, learner) in enumerate(CELLS13):
+            phases = [f"{learner}_{x}" for x, _, _ in ARMS13]
+            f = [_per_seed_local_f1(ds, p, _shared_seeds(ds, *phases)) for p in phases]
+            d = f[a] - f[b]
+            lo, hi = paired_ci(d)
+            ax.plot([lo, hi], [i + dy] * 2, color=col, lw=1.0)
+            ax.scatter(d.mean(), i + dy, marker=mk, s=18, color=col, edgecolor="white",
+                       linewidth=0.5, zorder=3, label=name if i == 0 else None)
+    ax.axvline(0, color=MUTED, lw=0.7, ls="--")
+    ax.set_yticks(range(len(CELLS13)))
+    ax.set_yticklabels([f"{DSET[ds]}  {learner}" for ds, learner in CELLS13])
+    ax.invert_yaxis()
+    ax.grid(axis="y", visible=False)
+    ax.grid(axis="x")
+    ax.set_xlabel(r"$\Delta$ local F1 (95% CI, paired by seed)")
+    ax.legend(loc="lower left", bbox_to_anchor=(0, 1.0), ncol=1, borderaxespad=0.2)
+    for ext in ("pdf", "png"):
+        fig.savefig(VAR / f"fig13_forest.{ext}")
+    plt.close(fig)
+
+
+# --------------------------------------------------------------------------- #
+# Figure 15 — closed-loop stability
+# --------------------------------------------------------------------------- #
+def _stability_arms() -> list[tuple[str, np.ndarray]]:
+    """(phase, per-seed cumulative accuracy): matched arms, then native D3.
+
+    Within each group arms are ordered by collapse count, so the figure reads
+    left to right from most to least stable.
     """
-    # Budget-matched arms first, then the two native-D3 arms, which answer a
-    # different question and must not be read as part of the matched comparison.
-    matched = [
-        ("C_early", "autoencoder\n(ours)", "#009E73"),
-        ("C_early_hdddm", "HDDDM\n(CIDUE'11)", "#0072B2"),
-        ("C_early_pca", "PCA\nlinear", "#56B4E9"),
-        ("C_early_mean", "mean-shift\n(floor)", "#CC79A7"),
-        ("C_early_d3", "D3\n(CIKM'19)", "#E69F00"),
-    ]
-    native = [
-        ("C_early_d3_sized", "D3 native\n(sized)", "#D55E00"),
-        ("C_early_d3_native", "D3 native\n(defaults)", "#999999"),
-    ]
+    matched = ["C_early", "C_early_hdddm", "C_early_pca", "C_early_mean", "C_early_d3"]
+    native = ["C_early_d3_sized", "C_early_d3_native"]
 
     def collect(group):
         out = []
-        for phase, label, color in group:
-            accs = np.array([
-                json.load(open(f))["final_acc"]
-                for f in glob.glob(str(RUNS / phase / "seed_*" / "summary.json"))
-            ])
+        for phase in group:
+            accs = np.array([json.load(open(f))["final_acc"]
+                             for f in glob.glob(str(RUNS / phase / "seed_*" / "summary.json"))])
             if accs.size:
-                out.append((label, accs, color))
-        # Within each group, order by collapse count so the figure reads left to
-        # right from most to least stable without the caption having to say so.
+                out.append((phase, accs))
         return sorted(out, key=lambda r: (r[1] < 0.90).sum())
 
-    xs, labels, series = [], [], []
-    for i, (label, accs, color) in enumerate(collect(matched) + collect(native)):
-        xs.append(i)
-        labels.append(f"{label}\nn={len(accs)}")
-        series.append((i, accs, color))
+    return collect(matched) + collect(native)
 
-    if not series:
+
+def fig15_closed_loop_stability(labels: bool = False) -> None:
+    """Per-seed cumulative accuracy by trigger; every seed drawn as its own point."""
+    arms = _stability_arms()
+    if not arms:
         print("  (no comparator runs; skipping fig15)")
         return
-
-    fig, ax = plt.subplots(figsize=(9, 4.6))
-    ax.axhspan(0.0, 0.90, color="#d62728", alpha=0.06, zorder=0)
-    ax.axhline(0.90, color="#d62728", lw=1.0, ls="--", zorder=1)
-    ax.axhline(0.80, color="#999999", lw=1.0, ls=":", zorder=1)
-    # Anchored left: the right-hand arms have points sitting on both guide lines.
-    ax.text(-0.42, 0.893, "collapse (< 0.90)", color="#d62728",
-            fontsize=9, ha="left", va="top")
-    ax.text(-0.42, 0.793, "majority class ≈ 0.80", color="#666666",
-            fontsize=9, ha="left", va="top")
-
+    n_matched = sum(p in ("C_early", "C_early_hdddm", "C_early_pca", "C_early_mean",
+                          "C_early_d3") for p, _ in arms)
+    fig, ax = plt.subplots(figsize=(COL, 2.3))
+    ax.axhspan(0.0, 0.90, color=PALE, lw=0, zorder=0)
+    ax.axhline(0.90, color=BLUE[3], lw=0.7, ls="--", zorder=1)
+    ax.axhline(0.80, color=MUTED, lw=0.7, ls=":", zorder=1)
+    ax.axvline(n_matched - 0.5, color=MUTED, lw=0.5, zorder=1)
     rng = np.random.default_rng(0)
-    for i, accs, color in series:
-        jitter = rng.uniform(-0.16, 0.16, size=len(accs))
-        ax.scatter(i + jitter, accs, s=34, color=color, alpha=0.85,
-                   edgecolor="white", linewidth=0.6, zorder=3)
-        ax.plot([i - 0.28, i + 0.28], [np.median(accs)] * 2,
-                color=color, lw=2.4, zorder=4)
-        n_bad = int((accs < 0.90).sum())
-        ax.annotate(f"{n_bad}/{len(accs)}", (i, 1.017), ha="center",
-                    fontsize=9, fontweight="bold",
-                    color="#d62728" if n_bad > len(accs) // 4 else "#333333")
+    for i, (phase, accs) in enumerate(arms):
+        color = MONITOR[phase][1]
+        ax.scatter(i + rng.uniform(-0.18, 0.18, size=len(accs)), accs, s=9, color=color,
+                   edgecolor=BLUE[4] if color == BLUE[0] else "white", linewidth=0.4, zorder=3)
+        ax.plot([i - 0.3, i + 0.3], [np.median(accs)] * 2, color=INK, lw=1.2, zorder=4)
+        if labels:
+            ax.annotate(f"{int((accs < 0.90).sum())}/{len(accs)}", (i, 1.02), ha="center",
+                        va="bottom", fontsize=6.5)
+    ax.set_xticks(range(len(arms)))
+    ax.set_xticklabels([MONITOR[p][0] for p, _ in arms])
+    ax.set_ylabel("Cumulative accuracy (per seed)")
+    ax.set_ylim(0.35, 1.07 if labels else 1.02)
+    ax.set_xlim(-0.6, len(arms) - 0.4)
+    save(fig, "fig15_closed_loop_stability", labels)
 
-    ax.set_xticks(xs)
-    ax.set_xticklabels(labels, fontsize=9)
-    ax.set_ylabel("cumulative accuracy (per seed)")
-    ax.set_ylim(0.35, 1.05)
-    ax.set_title("Closed-loop stability: identical policy, only the trigger differs",
-                 loc="left")
-    fig.text(0.5, -0.06,
-             "Bars mark medians; the count above each arm is collapsed seeds. The "
-             "first five arms fire equally often by calibration,\nso their spread "
-             "reflects *where* adaptation lands; the two native-D3 arms use D3's "
-             "own decision rule and are not budget-matched.",
-             ha="center", fontsize=8.5, color="#444444")
-    fig.savefig(OUT / "fig15_closed_loop_stability.png")
+
+def fig15_counts() -> None:
+    """Variant: healthy vs collapsed seeds per trigger as stacked bars."""
+    arms = _stability_arms()
+    fig, ax = plt.subplots(figsize=(COL, 2.0))
+    y = np.arange(len(arms))
+    bad = np.array([(a < 0.90).sum() for _, a in arms])
+    n = np.array([len(a) for _, a in arms])
+    ax.barh(y, n - bad, 0.62, color=BLUE[3], edgecolor="white", label="Healthy")
+    ax.barh(y, bad, 0.62, left=n - bad, color=BLUE[0], edgecolor="white", hatch="////",
+            hatchcolor=BLUE[3], label="Collapsed (cumulative accuracy < 0.90)")
+    ax.set_yticks(y)
+    ax.set_yticklabels([MONITOR[p][0].replace("\n", " ") for p, _ in arms])
+    ax.invert_yaxis()
+    ax.grid(axis="y", visible=False)
+    ax.grid(axis="x")
+    ax.set_xlabel("Seeds")
+    ax.set_xlim(0, n.max())
+    ax.set_xticks(np.arange(0, n.max() + 1, 5))
+    ax.legend(loc="lower left", bbox_to_anchor=(0, 1.0), ncol=2, borderaxespad=0.2)
+    for ext in ("pdf", "png"):
+        fig.savefig(VAR / f"fig15_counts.{ext}")
     plt.close(fig)
-    print("  wrote fig15_closed_loop_stability.png")
 
 
 def main() -> None:
     summ = load_summaries()
-    fig1_trajectory()
-    fig3_early(summ)
-    fig6_frequency_ablation()
-    fig8_sota_baselines(summ)
-    fig9_monitor_pipeline(summ)
-    fig10_budget_matched(summ)
-    fig11_early_ensemble()
-    fig12_external_validity()
-    fig13_timing_vs_frequency()
-    fig15_closed_loop_stability()
-    print("wrote:")
-    for p in sorted(OUT.glob("*.png")):
-        print(" ", p)
+    for labels in (False, True):
+        fig1_trajectory(labels)
+        fig3_early(summ, labels)
+        fig6_frequency_ablation(labels)
+        fig9_monitor_pipeline(summ, labels)
+        fig10_budget_matched(labels)
+        fig11_early_ensemble(labels)
+        fig12_external_validity(labels)
+        fig13_timing_vs_frequency(labels)
+        fig15_closed_loop_stability(labels)
+    fig1_delta()
+    fig12_forest()
+    fig13_forest()
+    fig15_counts()
+    print("wrote to", OUT, "and", VAR)
 
 
 if __name__ == "__main__":

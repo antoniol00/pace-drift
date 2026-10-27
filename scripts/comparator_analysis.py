@@ -271,7 +271,13 @@ def arm_table(arms: list[tuple[str, str]], ref_seeds: set[int],
         twa = train_window_attack_fraction(phase, seeds)
         fprx = (f"{np.median(cs['fpr']):.3f} / {cs['fpr'].max():.3f}"
                 if cs is not None else "n/a")
-        twx = f"{np.median(twa):.2f}" if twa is not None else "n/a"
+        twx = "n/a"
+        if twa is not None and acc is not None:
+            # median over all seeds, then healthy / collapsed: the arms mix the two
+            # modes in different proportions, so only the split compares like with like
+            bad = acc < COLLAPSE_TAU
+            parts = [f"{np.median(twa[m]):.2f}" if m.any() else "–" for m in (~bad, bad)]
+            twx = f"{np.median(twa):.2f} ({' / '.join(parts)})"
         lsx = f"{ls['recon_fires']:.0f} | {ls['recall']:.2f}" if ls else "n/a | n/a"
         rows.append(
             f"| {label} | {np.median(f1):.3f} | "
@@ -283,7 +289,7 @@ def arm_table(arms: list[tuple[str, str]], ref_seeds: set[int],
 
 HEADER = [
     "| monitor | local F1 median | per-seed local F1 | collapsed | "
-    "FPR med/worst | train atk% | adapts | monitor fires | anticip. recall |",
+    "FPR med/worst | train atk% (healthy / collapsed) | adapts | monitor fires | anticip. recall |",
     "|---|---:|---|---:|---:|---:|---:|---:|---:|",
 ]
 
@@ -322,7 +328,9 @@ def main() -> None:
         "operationally decisive number for an IDS. `train atk%` is the attack "
         "fraction of the samples the learner is actually fed inside triggered "
         "windows (the stream's own rate is 0.20); a value far above that is the "
-        "mechanism of the collapse.",
+        "mechanism of the collapse. It is the median over seeds, then the median "
+        "over healthy / collapsed seeds: arms mix the two modes in different "
+        "proportions, so only the split compares arms like with like.",
         "",
         "## A. Budget-matched arms — does the *signal* substitute?",
         "",

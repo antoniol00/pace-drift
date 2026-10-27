@@ -49,19 +49,19 @@ separability, not the deployed system.
 
 ![Monitor swapped in the full pipeline](../figures/fig9_monitor_pipeline.png)
 
-| Monitor in the PACE pipeline | final F1 | overall local F1 |
+| Monitor in the PACE pipeline (10 seeds) | final F1 | overall local F1 |
 |---|---|---|
-| Autoencoder (generative) | 0.986 | 0.595 |
-| **PCA reconstruction (linear)** | **0.969** | **0.584** |
-| mean-shift (trivial) | 0.778 | 0.485 |
+| Autoencoder (generative) | 0.987 | 0.599 |
+| **PCA reconstruction (linear)** | **0.973** | **0.577** |
+| mean-shift (trivial) | 0.673 | 0.456 |
 
 ## Interpretation
 
 **A reconstruction signal is needed, but the autoencoder is over-engineered.** In
 the deployed loop, where the monitor's score dynamics interact with the
 adaptation trigger, a **linear PCA reconstruction monitor nearly matches the
-autoencoder** (0.969 vs 0.986 final), while a **trivial mean-shift is clearly
-worse** (0.778). So the monitor must capture multivariate structure, but it need
+autoencoder** (0.973 vs 0.987 final), while a **trivial mean-shift is clearly
+worse** (0.673). So the monitor must capture multivariate structure, but it need
 not be non-linear: **cheap PCA suffices**, and it is far lighter to run. That is
 the configuration to deploy.
 
