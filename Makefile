@@ -5,6 +5,7 @@ SCHEDULE ?= results/drift_schedule.json
 
 .PHONY: setup test lint typecheck smoke schedule report clean-results \
         run-reactive run-pace run-freq run-sota run-sota-matched run-early-ensemble \
+        run-ensemble-controls \
         run-comparators run-anchor schedule-2018 schedule-unsw run-2018 run-unsw \
         analyse figures
 
@@ -61,6 +62,12 @@ run-early-ensemble:
 	uv run python run_experiment.py --phase ARF_early --seeds $(SEEDS) --n-jobs $(N_JOBS)
 	uv run python run_experiment.py --phase SRP_early --seeds $(SEEDS) --n-jobs $(N_JOBS)
 
+# Controls for the ensembles: a blind clock at ARF/SRP_early's fire count, and the
+# error Page-Hinkley run live on each ensemble's own predictions (no schedule).
+run-ensemble-controls:
+	@for p in ARF_freq SRP_freq ARF_pht SRP_pht; do \
+		uv run python run_experiment.py --phase $$p --seeds $(SEEDS) --n-jobs $(N_JOBS); done
+
 # Monitor ablation and published comparators, all fire-count matched to the
 # autoencoder. Run to 20 seeds: the collapse outcome is bimodal.
 COMPARATORS = C_early_pca C_early_mean C_early_hdddm C_early_d3 C_early_d3_native C_early_d3_sized
@@ -70,14 +77,15 @@ run-comparators:
 			--seeds 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19 \
 			--n-jobs 10; done
 
-run-anchor: schedule run-reactive run-pace run-freq run-sota run-sota-matched run-early-ensemble
+run-anchor: schedule run-reactive run-pace run-freq run-sota run-sota-matched run-early-ensemble \
+            run-ensemble-controls
 
 # ── External-validity datasets: CIC-IDS2018 + UNSW-NB15 ───────────────
 # Each dataset pins its own calibrated monitor threshold and blind-clock
 # interval in configs/datasets/<name>.yaml — never pass those as CLI flags.
 DATA2018 ?= cicids2018
 DATAUNSW ?= unsw
-DYNPHASES = C_early ARF_early SRP_early ARF_freq SRP_freq
+DYNPHASES = C_early ARF_early SRP_early C_freq ARF_freq SRP_freq ARF_pht SRP_pht
 SCHEDPHASES = B ARF_sched SRP_sched
 
 schedule-2018:

@@ -31,7 +31,10 @@ recon_pht_delta: 0.0005
 # ~142 fires here, which silently de-matches the control — this is exactly how a
 # batch of seeds was invalidated on 2026-07-28. Pinned so the flag is never
 # needed on the command line.
+# C_freq (HAT): 1.65M evaluated samples / 7710 -> 214 fires vs C_early's 213.8.
 by_phase:
+  C_freq:
+    periodic_adapt_interval: 7710
   ARF_freq:
     periodic_adapt_interval: 9549
   SRP_freq:

@@ -27,7 +27,10 @@ recon_pht_delta: 0.0005
 # phase defaults (254 fires vs ARF_early's 253; 256 vs SRP_early's 254), but they
 # are stated explicitly so the match is a recorded decision rather than a
 # coincidence that a later edit to the phase config could break.
+# C_freq (HAT): 2.95M evaluated samples / 9640 -> 306 fires vs C_early's 305.9.
 by_phase:
+  C_freq:
+    periodic_adapt_interval: 9640
   ARF_freq:
     periodic_adapt_interval: 11587
   SRP_freq:

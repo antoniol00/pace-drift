@@ -4,6 +4,7 @@ phase: ARF_freq
 # fire count matches ARF_early's mean for the dataset. Comparing ARF_early vs
 # ARF_freq isolates adaptation *timing* (informed anticipation) from *frequency*
 # (how often), the decisive test on the external datasets where ARF_early fires
-# MORE than the reactive schedule. Pass the per-dataset interval on the CLI:
-#   2018: --periodic-adapt-interval 11587   UNSW: --periodic-adapt-interval 9549
-periodic_adapt_interval: 11587
+# MORE than the reactive schedule. The value here is the CIC-IDS2017 anchor's
+# (1.95M evaluated samples / 17727 -> 110 fires vs ARF_early's 110.4 over ten
+# seeds); every other dataset pins its own in its profile's by_phase block.
+periodic_adapt_interval: 17727

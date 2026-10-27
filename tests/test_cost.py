@@ -32,3 +32,12 @@ def test_save_roundtrip(tmp_path):
     tracker.save(path)
     loaded = json.loads(path.read_text())
     assert loaded["n_samples"] == 1
+
+
+def test_labelled_samples_is_the_union_of_restarted_windows():
+    from driftgan.metrics.cost import labelled_samples
+
+    assert labelled_samples([], 5, 100) == 0
+    assert labelled_samples([10, 50], 5, 100) == 10  # disjoint windows
+    assert labelled_samples([10, 12], 5, 100) == 7  # restart at 12 -> learns 10..16
+    assert labelled_samples([98], 5, 100) == 3  # clipped at the stream end

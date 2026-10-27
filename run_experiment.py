@@ -41,6 +41,8 @@ PHASE_CONFIG = {
     "C_early_hdddm": "phase_c_early_hdddm.yaml",
     "ARF_sched": "phase_arf_sched.yaml",
     "SRP_sched": "phase_srp_sched.yaml",
+    "ARF_pht": "phase_arf_pht.yaml",
+    "SRP_pht": "phase_srp_pht.yaml",
     "ARF_early": "phase_arf_early.yaml",
     "SRP_early": "phase_srp_early.yaml",
     "ARF_freq": "phase_arf_freq.yaml",

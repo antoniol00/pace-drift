@@ -176,6 +176,10 @@ def run_phase(
             )
         else:
             trigger = DynamicPHTTrigger(delta=config.pht_delta)
+    elif phase in ("ARF_pht", "SRP_pht"):
+        # always live: the point of these arms is the learner's own error signal,
+        # so a drift_schedule in the config must never turn them into replays
+        trigger = DynamicPHTTrigger(delta=config.pht_delta)
     elif phase == "B_adwin":
         trigger = DynamicDetectorTrigger(river_drift.ADWIN(), name="adwin")
     elif phase == "B_kswin":

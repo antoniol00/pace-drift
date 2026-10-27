@@ -113,3 +113,35 @@ class CostTracker:
         Path(path).parent.mkdir(parents=True, exist_ok=True)
         with open(path, "w", encoding="utf-8") as f:
             json.dump(self.summary(), f, indent=2)
+
+
+def labelled_samples(fire_indices: list[int], window: int, last_index: int) -> int:
+    """Number of labelled samples a gated arm learns from.
+
+    Mirrors the runner: a firing at index ``i`` opens a window that learns from
+    ``i`` itself and the following samples, ``window`` in total, and a firing
+    inside an open window restarts it rather than stacking a second one. The
+    count is therefore the union of the windows, clipped at the stream end.
+
+    Parameters
+    ----------
+    fire_indices : list of int
+        Stream indices at which adaptation fired.
+    window : int
+        ``train_window`` of the run.
+    last_index : int
+        Index of the last processed sample.
+
+    Returns
+    -------
+    int
+        Labelled samples passed to the learner's update after pretraining.
+    """
+    idx = sorted(fire_indices)
+    total = 0
+    for i, start in enumerate(idx):
+        stop = min(start + window, last_index + 1)
+        if i + 1 < len(idx):
+            stop = min(stop, idx[i + 1])
+        total += stop - start
+    return total

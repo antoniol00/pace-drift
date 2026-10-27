@@ -105,6 +105,16 @@ def test_scheduled_phases_share_drift_indices(base_config, tmp_path):
         ).exists()
 
 
+def test_live_reactive_ensemble_ignores_the_schedule(base_config, tmp_path):
+    """`*_pht` fires from its own error test even when a schedule is configured."""
+    schedule = DriftSchedule(indices=[3_200], source="labels")
+    schedule_path = tmp_path / "sched.json"
+    schedule.save(schedule_path)
+    result = run_phase(base_config("ARF_pht", drift_schedule=str(schedule_path)), seed=0)
+    assert result.drift_indices and result.drift_indices != [3_200]
+    assert {e["source"] for e in result.drift_events} == {"pht"}
+
+
 def test_frequency_control_fires_on_a_blind_clock(base_config):
     """`*_freq` adapts on the periodic clock alone — no drift signal involved."""
     config = base_config("C_freq", periodic_adapt_interval=1_000)

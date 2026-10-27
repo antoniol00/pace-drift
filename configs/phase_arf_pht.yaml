@@ -1,0 +1,6 @@
+phase: ARF_pht
+# Live reactive control for ARF. ARF_sched replays the schedule recorded from a
+# live HAT pass, whereas ARF_early's error Page-Hinkley watches ARF's own error,
+# so ARF_early vs ARF_sched changes two things at once. This arm runs the same
+# error Page-Hinkley (pht_delta, river defaults otherwise) live on ARF's own
+# predictions with no monitor: ARF_early vs ARF_pht isolates the monitor.
