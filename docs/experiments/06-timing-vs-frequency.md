@@ -139,6 +139,11 @@ resolved**.
   as often as it does alone (ARF/2017 57.5 vs 59, SRP/2017 37.2 vs 37, …), except
   HAT/2017 (116 vs 161). Monitor firings are identical across learners (it never
   sees the learner's output): 53 / 162 / 81 per run on 2017 / 2018 / UNSW.
+  This is why PACE fires *less* than the schedule on 2017 (169 / 110 / 90 vs
+  233): the 233 are one HAT run's firings; live, the ensembles raise far fewer
+  error alarms (59 / 37) because they err less, and the monitor's 53 come on
+  top. On HAT both act: the live error test fires 161 rather than 233, and the
+  monitor's early windows cut it further to 116.
 - **Replaying is a handicap in itself** (+0.022 on aggregate for the live arm).
   On 2017 the schedule was recorded from a HAT run that collapsed (seed 0,
   cumulative accuracy 0.43; `B_pht` seed 0 collapses identically), so it carries
