@@ -232,15 +232,20 @@ but spurious ranking. Collapse-count comparisons here are held to n ≥ 20.
 
 ## 8. Citation verification status
 
-Verified against sources during this session (venue/year/DOI checked): D3 (CIKM
-2019), HDDDM (Ditzler & Polikar 2011), Gemaque et al. (WIREs 2020,
-doi:10.1002/widm.1381), Lu et al. (TKDE 2019, doi:10.1109/TKDE.2018.2876857),
-Arora et al. (WIREs 2024, doi:10.1002/widm.1536), ARF (Machine Learning 2017,
-doi:10.1007/s10994-017-5642-8), SRP (ICDM 2019), ADWIN (SDM 2007,
-doi:10.1137/1.9781611972771.42), autoencoder drift detection (ICAISC 2020,
-doi:10.1007/978-3-030-61401-0_12; IJMLC 2024, doi:10.1007/s13042-024-02223-2).
+All 25 entries of the paper's `references.bib` were checked field by field
+(title, authors, year, volume, issue, pages, DOI) against their Crossref records
+on 2026-10-27; every entry now carries a DOI. Two residual differences are
+expected: Lu et al. is TKDE 31(12) 2019 although Crossref only records the 2018
+early-access date, and Gomes et al. 2017 keeps the published misspelling
+"Pfharinger".
 
-**† Not re-verified this session** — standard references quoted from background
-knowledge; confirm the exact venue/page/DOI before submission: Page (1954), DDM
-(Gama et al. 2004), EDDM (Baena-García et al. 2006), KSWIN (Raab et al. 2020),
-HDDM (Frías-Blanco et al. 2015), HAT (Bifet & Gavaldà 2009).
+Corrected in that pass, after a reviewer flagged placeholders and
+misattributions: Arora et al. (the DOI is *A systematic review on detection and
+adaptation of concept drift in streaming data using machine learning
+techniques*, by Shruti Arora, Rinkle Rani and Nitin Saxena, WIREs 14(4)); Hinder
+et al. (title ends *Part A: detecting concept drift*); DriftLens (published as
+IEEE TKDE 37(10) 2025, not Knowledge-Based Systems; title without the "DriftLens:"
+prefix); Abdel Wahab (family name "Abdel Wahab", title *... Under Data and Concept
+Drifts: Online Deep Learning Approach*); AECDD (title without the "AECDD:"
+prefix); DD-SAPH (GPC 2023, LNCS 14503); AEDDM (IJMLC 16(1) 2025); Souza et al.
+(KAIS 63(6)); Lukats et al. (IJDSA 19(1) 2025); SSF (INFOCOM 2025).
