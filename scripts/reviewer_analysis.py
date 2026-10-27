@@ -19,7 +19,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 # reuse the palette, sizes and save/variant logic of the paper figures
-from paper_figures import ACC, BLUE, COLOR, FULL, MUTED, OUT, RUNS, SEEDS, SLATE_LT, save, tag  # noqa: E402
+from paper_figures import ACC, BLUE, COLOR, CORE, FULL, MUTED, OUT, RUNS, SLATE_LT, save, tag  # noqa: E402
 from river import drift as river_drift
 
 from driftgan.early.dual_pht import match_lead_times
@@ -39,13 +39,13 @@ PHASES = {  # top to bottom
 
 
 def available_phases() -> list[str]:
-    return [p for p in PHASES
-            if all((RUNS / p / f"seed_{s}" / "cost.json").exists() for s in SEEDS)]
+    return [p for p in PHASES if load_costs(p)]
 
 
 def load_costs(phase: str) -> list[dict]:
+    """Every core seed that was run; ADWIN, KSWIN and continuous ARF/SRP only have five."""
     out = []
-    for s in SEEDS:
+    for s in CORE:
         f = RUNS / phase / f"seed_{s}" / "cost.json"
         if f.exists():
             out.append(json.load(open(f)))
@@ -63,6 +63,7 @@ def fig4_resources(labels: bool = False) -> None:
     breakdown is a share, since absolute seconds are dominated by continuous SRP.
     """
     phases = available_phases()
+    print("  fig4 seeds:", {p: len(load_costs(p)) for p in phases})
     y = np.arange(len(phases))
     fig, (axT, axL, axB) = plt.subplots(1, 3, figsize=(FULL, 2.6), sharey=True,
                                         gridspec_kw={"width_ratios": [1, 1.15, 1.15]})
@@ -162,7 +163,7 @@ def fig5_sweep() -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     delta, min_instances, horizon = 0.0005, 10, 20_000  # match phase_c_early.yaml
     thresholds = np.geomspace(0.01, 2.0, 24)
     per_seed = []
-    for s in SEEDS:
+    for s in CORE:
         lt = json.load(open(RUNS / "C_early" / f"seed_{s}" / "lead_time.json"))
         series = lt.get("recon_error_series", [])
         if not series:

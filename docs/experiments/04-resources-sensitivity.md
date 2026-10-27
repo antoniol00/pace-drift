@@ -16,16 +16,23 @@ and where does the compute go?
 
 ![Resource profile](../figures/fig4_resources.png)
 
-- **Throughput** (samples/s, mean over seeds): the HAT phases run at ~2.4K–13.3K/s;
-  continuous ensembles are far heavier — ARF ~1.0K/s, and **SRP ~130/s** (its p95 latency
-  is ~11 ms/sample vs sub-ms for HAT). C_early ~7.2K/s.
+Mean over the ten core seeds; ADWIN, KSWIN and continuous ARF/SRP were only run
+on five.
+
+- **Throughput** (samples/s): the HAT phases run at ~2.4K–13.3K/s; continuous
+  ensembles are far heavier — ARF ~1.0K/s, and **SRP ~130/s** (its p95 latency
+  is ~11 ms/sample vs sub-ms for HAT). C_early ~7.5K/s, B ~7.8K/s.
 - **Latency tail**: per-sample latency is **sub-millisecond typically** (p50
   0.04–0.07 ms in every HAT arm, PACE included, except KSWIN at 0.35 ms because its
-  KS test runs on every sample; p99 ~1 ms), but the monitor's periodic refit
+  KS test runs on every sample; p99 0.7–1.3 ms), but the monitor's periodic refit
   **spikes the max to ~1 s** — the relevant number for a line-rate IDS, and worth
-  stating openly. PACE's lower throughput is that minority of expensive samples,
-  not the typical one: more update time (158 s vs 119 s per run for B) plus 27 s
-  of monitor, about a third more compute.
+  stating openly.
+- **Wall-clock is load-dependent.** Apart from KSWIN, throughput gaps between the
+  HAT arms are not a method ranking: B alone spans ~4.2K–20.4K/s across seeds, and
+  its seeds 5–9 ran in a busier batch (inference ~130 s vs ~76 s for the same
+  work). At five seeds B read 10.8K/s and PACE looked ~a third costlier; at ten
+  the gap is gone. What PACE does add is its monitor, ~28 s per run (~10% of its
+  compute).
 - **Where the time goes**: the proactive arm spends a visible slice in the shift
   monitor; the HAT
   update/inference is the rest.
@@ -59,7 +66,7 @@ rate, and lead time.
 ![Operating-point sensitivity](../figures/fig5_early_sensitivity.png)
 
 - At the operating threshold (0.1) the **anticipation recall is ~0.23** — the
-  monitor foresees about a quarter of drifts (max ~0.53 at the most aggressive
+  monitor foresees about a quarter of drifts (mean over ten seeds; max ~0.52 at the most aggressive
   setting). This is the honest limitation of the early monitor.
 - **Lead time is stable at ~6–8K samples across a wide threshold band**, so 0.1 is
   not an overfit knife-edge.

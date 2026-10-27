@@ -40,7 +40,7 @@ from PIL import Image
 
 RUNS = Path("results/runs")
 REC = Path("results/recovery")
-SEEDS = [0, 1, 2, 3, 4]  # cost and sensitivity analyses (reviewer_analysis, monitor_ablation)
+SEEDS = [0, 1, 2, 3, 4]  # the monitor-ablation frontier (monitor_ablation, fig7)
 CORE = list(range(10))  # the ten seeds of the core, frequency, monitor and lead-time analyses
 
 # --------------------------------------------------------------------------- #
