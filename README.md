@@ -1,4 +1,4 @@
-# PACE Drift — *When to adapt*: a cheap unsupervised covariate-shift trigger for streaming intrusion detection
+# PACE Drift — *When to retrain* a network intrusion detector: timing, triggers and closed-loop collapse
 
 **PACE** — *Proactive Adaptation via Covariate-shift Estimation*.
 
@@ -250,8 +250,8 @@ Makefile                  # setup / test / lint / smoke / schedule / run-* / rep
 
 ```bibtex
 @misc{pacedrift2026,
-  title  = {PACE: when to adapt --- a cheap unsupervised covariate-shift
-            trigger for streaming intrusion detection},
+  title  = {When to Retrain a Network Intrusion Detector: Budget-Matched
+            Evidence on Timing, Triggers and Closed-Loop Collapse},
   author = {Lara Guti\'errez, Antonio},
   year   = {2026},
   note   = {https://github.com/antoniol00/pace-drift}

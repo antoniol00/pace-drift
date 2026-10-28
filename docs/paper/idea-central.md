@@ -4,6 +4,19 @@
 to adapt** as a design decision in its own right, rather than a consequence of
 whichever drift detector is bolted onto a streaming classifier.
 
+> **Paper framing (IEEE Euro S&P 2027, from October 2026).** The paper is now
+> *"When to Retrain a Network Intrusion Detector: Budget-Matched Evidence on
+> Timing, Triggers and Closed-Loop Collapse"*. After the live control (`*_pht`)
+> left the monitor's contribution unresolved, PACE is presented as the
+> **hypothesis under test**, not the contribution. The three headline findings
+> are: timing, not frequency, carries the gain (+0.042 [+0.008, +0.077]); under
+> immediate labels the label-free signal does not beat a live error test
+> (+0.021 [−0.002, +0.045]); and every trigger can collapse the detector into an
+> alert flood, which makes the trigger safety-critical and, because an
+> unsupervised trigger fires on traffic anyone can send, a potential attack
+> surface (discussed, **not evaluated** — never claim an attack was shown).
+> Label delay and an adversary steering the trigger are the next experiments.
+
 ## The problem
 
 A network intrusion detector trained offline meets non-stationary traffic. New
