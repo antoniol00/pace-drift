@@ -81,9 +81,13 @@ We have not found this reported anywhere in the unsupervised-drift literature,
 and it is invisible to the detection metrics that literature does report.
 
 **Our monitor is not more stable than the published detectors.** HDDDM is
-statistically indistinguishable from it (5/20 vs 4/20, p = 1.00), as is PCA
-(6/20, p = 0.72). D3 is worse in point estimate (10/20) but not significantly so
-at this n. The only arm that separates is the trivial mean-shift floor — so the
+not distinguishable from it (5/20 vs 4/20, p = 1.00), nor is PCA (6/20,
+p = 0.72). D3 is worse in point estimate (10/20, unchanged after the solver was
+made to converge — see [09](09-review-round-3.md)) but not significantly so at
+this n. These tests are weak (power 0.41 for 20% vs 50% at n = 20): "not
+distinguishable", never "equivalent". The live error test with no monitor
+collapses 8/20 too, and the ensembles 0/20 — collapse belongs to gating the
+single tree, not to unsupervised triggers. The only arm that separates is the trivial mean-shift floor — so the
 signal does matter at the bottom end, but not between the sophisticated ones.
 This is stated plainly because the criterion, not a ranking, is the contribution.
 

@@ -85,7 +85,9 @@ def cell_seeds(dataset: str, *phases: str) -> list[int]:
         }
         for ph in phases
     ]
-    return sorted(set.intersection(*sets)) if sets else []
+    # The real-data protocol is ten seeds; seeds 10-19 exist on the anchor only
+    # for the twenty-seed stability controls and must not enter these cells.
+    return sorted(set.intersection(*sets) & set(range(10))) if sets else []
 
 
 def per_seed_local_f1(dataset: str, phase: str, seeds: list[int]) -> np.ndarray | None:

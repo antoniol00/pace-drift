@@ -24,8 +24,9 @@ drift-dense regions where strategies actually diverge.
 | 4 | [Cost & sensitivity](04-resources-sensitivity.md) | Is it deployable? Is the operating point fragile? | **Sub-ms** typical latency; lead time stable across a wide threshold band |
 | 5 | [External validity](05-external-validity.md) | Does it hold beyond CIC-IDS2017? | **Positive in all 9 (dataset × learner) cells** against the replayed schedule; label efficiency is 2017-specific |
 | 6 | [Timing vs frequency](06-timing-vs-frequency.md) | Does it survive inferential scrutiny, is it timing or frequency, and is it the monitor? | Aggregate **+0.043 [+0.021, +0.065]** = timing **+0.042** + frequency +0.001; timing on 2017/2018, frequency on UNSW. Against a **live** error test the monitor adds **+0.021 [−0.002, +0.045] — not resolved** |
-| 7 | [Unsupervised comparators](07-unsupervised-comparator.md) | Do published unsupervised detectors do the job as well? | **Within noise — and that is the point.** Every trigger, ours included, collapses the loop on 20–60% of runs, through a verified mechanism no detection metric reveals |
-| 8 | [Controlled stream](08-synthetic-timing.md) | Does the core claim hold where drift is known by construction? | **+0.213 [+0.188, +0.238]** at an exactly matched adaptation budget |
+| 7 | [Unsupervised comparators](07-unsupervised-comparator.md) | Do published unsupervised detectors do the job as well? | **Within noise — and that is the point.** Every stream-responsive trigger on HAT, ours and the live error test included, collapses the loop on 20–60% of runs; ensembles do not (see [09](09-review-round-3.md)) |
+| 8 | [Controlled stream](08-synthetic-timing.md) | Does the core claim hold where drift is known by construction? | Timing **+0.254 / +0.288** (PCA / AE, 10 seeds) at an exactly matched budget; the monitor adds only ~+0.02 over the live error test |
+| 9 | [Third review round](09-review-round-3.md) | Do the claims survive clustered intervals, 20 seeds, a metric that sees benign windows, a converged D3 and stability controls? | Timing aggregate **[−0.003, +0.084]** under a hierarchical bootstrap (per-cell evidence carries it); HAT anchor vs schedule **+0.000** at 20 seeds; collapse hits **every stream-responsive trigger on HAT, incl. the live error test (8/20)**, needs feedback, and spares the ensembles |
 
 ## The argument in one paragraph
 

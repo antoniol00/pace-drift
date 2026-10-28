@@ -11,7 +11,7 @@ whichever drift detector is bolted onto a streaming classifier.
 > **hypothesis under test**, not the contribution. The three headline findings
 > are: timing, not frequency, carries the gain (+0.042 [+0.008, +0.077]); under
 > immediate labels the label-free signal does not beat a live error test
-> (+0.021 [−0.002, +0.045]); and every trigger can collapse the detector into an
+> (+0.021 [−0.002, +0.045]); and every stream-responsive trigger can collapse a single-tree detector into an
 > alert flood, which makes the trigger safety-critical and, because an
 > unsupervised trigger fires on traffic anyone can send, a potential attack
 > surface (discussed, **not evaluated** — never claim an attack was shown).
@@ -75,7 +75,13 @@ aggregated over cells, **+0.043 [95% CI +0.021, +0.065]**, with the CI excluding
 reproduce it: over the nine cells the timing component is **+0.042
 [+0.008, +0.077]** and the frequency component +0.001. The same holds on a
 generated stream whose drift structure is known by construction, at an exactly
-matched budget (**+0.213 [+0.188, +0.238]**).
+matched budget over 10 seeds (**+0.254 [+0.106, +0.401]** with PCA, **+0.288
+[+0.157, +0.419]** with the AE) — where the monitor again adds only ~+0.02 over
+the live error test. Caveat (third review round): treating the three datasets as
+clusters (hierarchical bootstrap) widens the nine-cell timing interval to
+**[−0.003, +0.084]**; the per-cell intervals (7/9, all six on 2017/2018) carry
+the claim, not the aggregate. At 20 seeds the HAT anchor's PACE − schedule gain
+vanishes (+0.000) while its timing contrast survives (+0.076 [+0.002, +0.149]).
 
 **But the informing is mostly the live error test, not the monitor.** The
 reactive arms replay a schedule recorded once from HAT at seed 0. Run live on
@@ -108,8 +114,10 @@ not predict any of this, and final-window F1 actively conceals it — one run sh
 final F1 0.948 with cumulative accuracy 0.444.
 
 **We could not show our monitor is more stable than the published ones.** HDDDM
-and PCA are statistically indistinguishable from it; only the trivial mean-shift
-floor separates. The contribution here is the criterion and the fragility it
+and PCA are not distinguishable from it at 20 seeds (low power: 0.41 for 20% vs
+50%); only the trivial mean-shift floor separates. The fragility is not specific
+to unsupervised triggers: the live error test alone collapses HAT on 8/20, a fixed
+replayed schedule only 2/20 (no feedback), and the ensembles never. The contribution here is the criterion and the fragility it
 exposes, not a ranking that favours us.
 
 ## What we do not claim

@@ -27,7 +27,9 @@ traces. Script: `scripts/tier0_analysis.py`.
   seed dissents). The 2 remaining WEAK cells are **HAT** ones (high seed
   variance); every ensemble cell has a CI excluding 0, five of the six with
   10/10 seeds agreeing at Wilcoxon p=0.002. Aggregate over the 9 cells: mean Δ
-  **+0.043**, 95% CI **[+0.021, +0.065]**, 9/9 positive (sign test p=0.0039).
+  **+0.043**, 95% CI **[+0.021, +0.065]**, 9/9 positive; hierarchical bootstrap
+  (datasets, then seeds) [+0.022, +0.075]. The timing aggregate +0.042 widens to
+  [−0.003, +0.084] under it ([09](09-review-round-3.md)); the per-cell intervals carry the claim.
 - **Confirmed in imbalance-aware metrics.** Prequential Kappa-M (from per-sample
   traces) is positive for both arms in all 9 cells, and the proactive arm
   improves both Kappa-M and Kappa-Temporal in all 9. Kappa-Temporal itself is

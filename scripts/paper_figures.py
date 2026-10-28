@@ -288,7 +288,8 @@ def _cell_seeds(dataset: str, phase: str) -> list[int]:
 
 def _shared_seeds(dataset: str, *phases: str) -> list[int]:
     """Seeds completed by every one of ``phases`` (paired comparisons)."""
-    return sorted(set.intersection(*(set(_cell_seeds(dataset, p)) for p in phases)))
+    # Ten-seed protocol; anchor seeds 10-19 belong to the stability controls only.
+    return sorted(set.intersection(*(set(_cell_seeds(dataset, p)) for p in phases)) & set(CORE))
 
 
 def _overall_local_f1(dataset: str, phase: str,

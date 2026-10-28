@@ -5,8 +5,10 @@
 > one PCA seed shows `final_f1 = 0.948` while its cumulative accuracy is `0.444`
 > and its false-positive rate `0.657`. Always check cumulative accuracy and FPR
 > alongside it. Judged on closed-loop stability at 20 seeds the conclusion below
-> is unchanged: PCA and the autoencoder are indistinguishable (6/20 vs 4/20
-> collapses, Fisher p = 0.72).
+> is unchanged: PCA and the autoencoder are not distinguishable (6/20 vs 4/20
+> collapses, Fisher p = 0.72). PCA's cost advantage is the tail and memory, not
+> total compute: max latency 146 ms vs 1,376 ms, peak RSS 782 vs 1,310 MB, but
+> monitor time 35 s vs 26 s per run (clean benchmark, [09](09-review-round-3.md)).
 
 ## Question
 

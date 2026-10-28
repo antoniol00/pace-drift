@@ -10,6 +10,11 @@ phase: C_early_d3
 # gives 59 fires at threshold=0.32 / delta=0.0005, matching the autoencoder's 58
 # recon fires -> the arms are fire-count matched and only the shift statistic
 # differs. See docs/paper/related-work.md and docs/experiments/07-*.md.
+#
+# 2026-10-28: the logistic regression is now fitted to convergence (L-BFGS);
+# the earlier 150-step gradient descent was under-converged. Re-calibrated on
+# the converged series (AUC: min 0.411, median 0.585, p90 0.722, max 0.854):
+# threshold 0.32 gives 58 fires against the autoencoder's 58, so it is kept.
 monitor_type: d3
 monitor_interval: 1000
 monitor_clip: 10.0

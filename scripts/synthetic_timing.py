@@ -54,9 +54,23 @@ CENTER_SEED = 777      # fixes the concept centres
 
 DATA_DIR = Path("results/synthetic/data")
 OUT = Path("results/report/synthetic")
-RUNS = Path("results/runs/synthetic_timing")
-SEEDS = [0, 1, 2, 3, 4]
+SEEDS = list(range(10))  # the real-data protocol's ten (the first version ran five)
 DATASET = "synthetic_timing"
+# Monitor under test: "pca" (the original run) or "ae" (the paper's primary
+# monitor). Each writes its own run namespace so the two never mix.
+MONITOR = "pca"
+
+
+def _dataset() -> str:
+    return DATASET if MONITOR == "pca" else f"{DATASET}_{MONITOR}"
+
+
+def _runs() -> Path:
+    return Path("results/runs") / _dataset()
+
+
+def _out() -> Path:
+    return OUT if MONITOR == "pca" else OUT / MONITOR
 
 
 def _concept_centers() -> np.ndarray:
@@ -106,11 +120,11 @@ def generate() -> Path:
 
 def _cfg(phase: str, csv: Path) -> ExperimentConfig:
     return ExperimentConfig(
-        phase=phase, dataset=DATASET, benign_label="benign",
+        phase=phase, dataset=_dataset(), benign_label="benign",
         csv_path=str(csv), drop_cols=(), target_col="label", start_row=0,
         n_pretrain=PRETRAIN, max_samples=L, device="cpu",
         train_window=TRAIN_WINDOW,
-        monitor_type="pca", monitor_interval=500, monitor_latent=8,
+        monitor_type=MONITOR, monitor_interval=500, monitor_latent=8,
         recon_pht_threshold=0.1, recon_pht_delta=0.0005,
         recon_pht_min_instances=10, lead_horizon=20_000,
     )
@@ -139,7 +153,7 @@ def run() -> None:
 def _f1(phase: str) -> np.ndarray | None:
     out = []
     for s in SEEDS:
-        f = RUNS / phase / f"seed_{s}" / "snapshots.parquet"
+        f = _runs() / phase / f"seed_{s}" / "snapshots.parquet"
         if not f.exists():
             return None
         df = pd.read_parquet(f)
@@ -150,7 +164,7 @@ def _f1(phase: str) -> np.ndarray | None:
 def _count(phase: str) -> float | None:
     vals = []
     for s in SEEDS:
-        f = RUNS / phase / f"seed_{s}" / "summary.json"
+        f = _runs() / phase / f"seed_{s}" / "summary.json"
         if not f.exists():
             return None
         vals.append(json.loads(f.read_text())["n_drifts"])
@@ -158,7 +172,8 @@ def _count(phase: str) -> float | None:
 
 
 def analyze() -> None:
-    OUT.mkdir(parents=True, exist_ok=True)
+    out = _out()
+    out.mkdir(parents=True, exist_ok=True)
     f1r, f1f, f1e = _f1("B"), _f1("C_freq"), _f1("C_early")
     if f1r is None or f1f is None or f1e is None:
         print("  (synthetic runs not present yet — run with --all)")
@@ -173,7 +188,7 @@ def analyze() -> None:
     lines = [
         "# Controlled synthetic stream — informed timing vs a blind clock",
         "",
-        "HAT with the cheap PCA monitor on a generated stream whose drift "
+        f"HAT with the {MONITOR.upper()} monitor, {len(SEEDS)} seeds, on a generated stream whose drift "
         f"structure is known: {N_DRIFTS} episodes of {BLOCK} samples cycling "
         f"{N_CONCEPTS} attack concepts, `train_window={TRAIN_WINDOW}`. The blind "
         "clock's interval is set from the proactive arm's own fire count, so the "
@@ -195,16 +210,19 @@ def analyze() -> None:
         "budget uniformly.",
     ]
     doc = "\n".join(lines) + "\n"
-    (OUT / "analysis.md").write_text(doc)
+    (out / "analysis.md").write_text(doc)
     print(doc)
-    print(f"wrote {OUT / 'analysis.md'}")
+    print(f"wrote {out / 'analysis.md'}")
 
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--all", action="store_true", help="generate + run + analyze")
     ap.add_argument("--analyze", action="store_true", help="analyze existing runs only")
+    ap.add_argument("--monitor", choices=["pca", "ae"], default="pca", help="monitor under test")
     args = ap.parse_args()
+    global MONITOR
+    MONITOR = args.monitor
     if args.all:
         run()
     if args.all or args.analyze or not (args.all or args.analyze):

@@ -59,7 +59,20 @@ NATIVE_ARMS = [
     ("C_early_d3_sized", "D3 native, window sized for the data (w=1000, rho=0.2)"),
 ]
 
-ARMS = MATCHED_ARMS + NATIVE_ARMS
+# Controls over the same twenty seeds: is collapse specific to an unsupervised
+# trigger, or does any gated policy on the single tree produce it? And does it
+# survive on the ensembles the paper recommends? Not budget-matched.
+CONTROL_ARMS = [
+    ("B", "reactive, replayed schedule"),
+    ("B_pht", "reactive, live error test"),
+    ("C_freq", "blind clock"),
+    ("ARF_pht", "ARF, live error test"),
+    ("ARF_early", "ARF, PACE"),
+    ("SRP_pht", "SRP, live error test"),
+    ("SRP_early", "SRP, PACE"),
+]
+
+ARMS = MATCHED_ARMS + NATIVE_ARMS + CONTROL_ARMS
 
 
 def seeds_of(phase: str) -> set[int]:
@@ -183,6 +196,21 @@ def train_window_attack_fraction(
     return np.array(out)
 
 
+def fire_split(phase: str, seeds: list[int]) -> tuple[float, float]:
+    """Mean firings per seed from the monitor and from everything else.
+
+    Calibration matches only the monitor's firings; the error test's firings
+    are a consequence of the run, and they explode once a run collapses.
+    """
+    mon = other = 0
+    for s in seeds:
+        ev = json.loads((RUNS / phase / f"seed_{s}" / "drift_events.json").read_text())["events"]
+        n_mon = sum(e["source"] in ("recon", "recon+class") for e in ev)
+        mon += n_mon
+        other += len(ev) - n_mon
+    return mon / len(seeds), other / len(seeds)
+
+
 def paired_ci(d: np.ndarray) -> tuple[float, float]:
     m = float(d.mean())
     se = float(d.std(ddof=1) / np.sqrt(len(d)))
@@ -278,19 +306,20 @@ def arm_table(arms: list[tuple[str, str]], ref_seeds: set[int],
             bad = acc < COLLAPSE_TAU
             parts = [f"{np.median(twa[m]):.2f}" if m.any() else "–" for m in (~bad, bad)]
             twx = f"{np.median(twa):.2f} ({' / '.join(parts)})"
-        lsx = f"{ls['recon_fires']:.0f} | {ls['recall']:.2f}" if ls else "n/a | n/a"
+        lsx = f"{ls['recall']:.2f}" if ls else "n/a"
+        fm, fo = fire_split(phase, seeds)
         rows.append(
             f"| {label} | {np.median(f1):.3f} | "
             f"{' '.join(f'{v:.2f}' for v in f1)} | {n_bad}/{len(f1)} | "
-            f"{fprx} | {twx} | {nd.mean():.0f} | {lsx} |"
+            f"{fprx} | {twx} | {nd.mean():.0f} ({fm:.0f} / {fo:.0f}) | {lsx} |"
         )
     return rows, pending
 
 
 HEADER = [
     "| monitor | local F1 median | per-seed local F1 | collapsed | "
-    "FPR med/worst | train atk% (healthy / collapsed) | adapts | monitor fires | anticip. recall |",
-    "|---|---:|---|---:|---:|---:|---:|---:|---:|",
+    "FPR med/worst | train atk% (healthy / collapsed) | adapts (monitor / other) | anticip. recall |",
+    "|---|---:|---|---:|---:|---:|---:|---:|",
 ]
 
 
@@ -308,6 +337,7 @@ def main() -> None:
     accs: dict[str, np.ndarray] = {}
     matched_rows, pending_m = arm_table(MATCHED_ARMS, ref_seeds, collapse, accs)
     native_rows, pending_n = arm_table(NATIVE_ARMS, ref_seeds, collapse, accs)
+    control_rows, pending_c = arm_table(CONTROL_ARMS, ref_seeds, collapse, accs)
 
     lines = [
         "# Unsupervised comparator — our monitor vs published detectors",
@@ -361,6 +391,21 @@ def main() -> None:
     ]
     if pending_n:
         lines += ["", f"> Pending runs: {', '.join(pending_n)}."]
+
+    lines += [
+        "",
+        "## C. Controls — is collapse specific to an unsupervised trigger?",
+        "",
+        "The reactive baseline (replayed schedule and live error test), the blind "
+        "clock, and the ensembles with and without the monitor, over the same seeds. "
+        "Not budget-matched; Fisher p against the autoencoder is in the sensitivity "
+        "table below.",
+        "",
+        *HEADER,
+        *control_rows,
+    ]
+    if pending_c:
+        lines += ["", f"> Pending runs: {', '.join(pending_c)}."]
 
     lines += collapse_sensitivity_section(accs)
     lines += ["", "## Verdict", "", *verdict_lines(base, base_seeds, ref_seeds, collapse)]

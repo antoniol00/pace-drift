@@ -27,29 +27,40 @@ specified rather than inferred:
 - The blind clock's interval is derived from the proactive arm's own mean fire
   count, so the two arms adapt equally often and differ **only** in placement.
 
-HAT base learner with the cheap PCA monitor (the configuration
-[experiment 2](02-monitor-ablation.md) recommends), 5 seeds.
+HAT base learner, **10 seeds**, with the PCA monitor (the original run, which used 5
+seeds) and with the autoencoder (added in the third review round, so the controlled
+check uses the paper's primary monitor and the real-data seed count). Layout: 20K
+pretraining with one known concept at 8K-12K; 40 episodes of 1,000 samples, one
+every 7,000 samples (6,000 benign between), 14.7% attack overall; monitor checks
+every 500 samples. Run with `--monitor pca|ae`; the AE runs live under
+`results/runs/synthetic_timing_ae/`.
 
 ## Results
 
-| arm | adaptations | overall local F1 |
-|---|---:|---:|
-| reactive (error-triggered) | 86 | 0.821 |
-| blind periodic clock | 142 | 0.635 |
-| **monitor-driven (PACE)** | **142** | **0.848** |
+| arm | adaptations | local F1, PCA | local F1, AE |
+|---|---:|---:|---:|
+| reactive (error test, live) | 87 | 0.822 | 0.822 |
+| blind periodic clock | 142 / 143 | 0.588 | 0.549 |
+| **PACE** | **143** (87 error + 56 monitor) | **0.841** | **0.837** |
 
 **Timing effect (PACE − blind clock, paired by seed at matched budget):
-+0.213, 95% CI [+0.188, +0.238].**
+PCA +0.254 [+0.106, +0.401], AE +0.288 [+0.157, +0.419].** One clock seed per
+monitor collapses entirely, which widens the intervals.
 
-The fire counts match exactly (142 vs 142), so the gap is attributable to
-placement alone.
+**What the monitor adds over the live error test: PCA +0.019 [+0.002, +0.037],
+AE +0.015 [−0.002, +0.032].** PACE's error test fires as often as the reactive
+baseline (87); the monitor fires ~1.4 times per episode (onset, and often the
+return to benign — the recon PHT is two-sided). As on real traffic, almost all of
+the advantage over the blind clock is already in the live error test.
+
+The 5-seed PCA run reported +0.213 [+0.188, +0.238]; it is superseded.
 
 ## Interpretation
 
 The core claim reproduces on a stream where nothing about the drift is
 accidental: informed placement beats a blind clock at an identical adaptation
 budget, by a wide margin. Note also that the blind clock lands **well below the
-reactive baseline** (0.635 vs 0.821) despite adapting more often — the same
+reactive baseline** (0.588 vs 0.822) despite adapting more often — the same
 pattern seen on CIC-IDS2017 in [experiment 1](01-frequency-control.md) and on
 CIC-IDS2018 in [experiment 6](06-timing-vs-frequency.md). Adapting at the wrong
 moments is not merely wasted effort; it is actively harmful, because the training
@@ -57,7 +68,7 @@ window lands on a distribution the model will not be tested on.
 
 ## Caveats
 
-- The margin here (+0.213) is far larger than on real data (+0.038 to +0.048 on
+- The margin here (+0.25 to +0.29) is far larger than on real data (+0.038 to +0.048 on
   CIC-IDS2018). A generated stream with clean, well-separated concepts is an
   easier setting than real flow traffic; this experiment establishes that the
   mechanism is real, **not** the effect size to expect in deployment.
