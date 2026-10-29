@@ -5,8 +5,10 @@ to adapt** as a design decision in its own right, rather than a consequence of
 whichever drift detector is bolted onto a streaming classifier.
 
 > **Paper framing (IEEE Euro S&P 2027, from October 2026).** The paper is now
-> *"When to Retrain a Network Intrusion Detector: Budget-Matched Evidence on
-> Timing, Triggers and Closed-Loop Collapse"*. After the live control (`*_pht`)
+> *"When to Retrain a Network Intrusion Detector, and How an Attacker Can
+> Steer It"* (retitled on 2026-10-29 from "...: Budget-Matched Evidence on
+> Timing, Triggers and Closed-Loop Collapse" once the security evaluation was
+> measured). After the live control (`*_pht`)
 > left the monitor's contribution unresolved, PACE is presented as the
 > **hypothesis under test**, not the contribution. The three headline findings
 > are: timing, not frequency, carries the gain (+0.042 [+0.008, +0.077]); under
