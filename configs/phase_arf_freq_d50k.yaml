@@ -4,12 +4,6 @@ phase: ARF_freq_d50k
 # the monitor does not. See docs/experiments/11-delay-and-linear.md.
 # The clock interval below is recalibrated to the delayed *_early arm's fire count.
 label_delay: 50000
-# Frequency-matched control for ARF_early (Tier 1). ARF adapting only in
-# triggered train windows on a BLIND periodic clock, with interval chosen so the
-# fire count matches ARF_early's mean for the dataset. Comparing ARF_early vs
-# ARF_freq isolates adaptation *timing* (informed anticipation) from *frequency*
-# (how often), the decisive test on the external datasets where ARF_early fires
-# MORE than the reactive schedule. The value here is the CIC-IDS2017 anchor's
-# (1.95M evaluated samples / 17727 -> 110 fires vs ARF_early's 110.4 over ten
-# seeds); every other dataset pins its own in its profile's by_phase block.
-periodic_adapt_interval: 17727
+# CIC-IDS2017: 1.95M evaluated samples / 4767 -> 409 fires vs ARF_early_d50k's
+# 409.1 (mean over its ten seeds); CIC-IDS2018 pins its own in its profile's by_phase block.
+periodic_adapt_interval: 4767

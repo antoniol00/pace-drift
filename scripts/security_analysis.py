@@ -57,6 +57,13 @@ ARMS = [
     ("ARF_early_rb", "ARF, PACE + rebalancing", "ARF_early"),
     ("SRP_early", "SRP, PACE", None),
     ("SRP_early_rb", "SRP, PACE + rebalancing", "SRP_early"),
+    # Does collapse need the tree? A single online logistic regression.
+    ("LR_early", "LR, PACE", None),
+    ("LR_pht", "LR, live error test", "LR_early"),
+    ("LR_freq", "LR, blind clock", "LR_early"),
+    ("LR_early_rb", "LR, PACE + rebalancing", "LR_early"),
+    ("LR_early_chaff", "LR, PACE, chaff", "LR_early"),
+    ("LR_early_chaff_rb", "LR, chaff + rebalancing", "LR_early_chaff"),
 ]
 DEFENCE_PAIRS = [
     ("C_early", "C_early_rb"),
@@ -70,6 +77,8 @@ DEFENCE_PAIRS = [
     ("C_freq", "C_freq_rb"),
     ("ARF_early", "ARF_early_rb"),
     ("SRP_early", "SRP_early_rb"),
+    ("LR_early", "LR_early_rb"),
+    ("LR_early_chaff", "LR_early_chaff_rb"),
 ]
 # Do the paper's two contrasts survive once the training distribution is pinned?
 RB_CONTRASTS = [
@@ -77,6 +86,9 @@ RB_CONTRASTS = [
     ("C_early_rb", "B_pht_rb", "monitor under the defence (PACE - live error test)"),
     ("C_early", "C_freq", "timing without the defence, same seeds"),
     ("C_early", "B_pht", "monitor without the defence, same seeds"),
+    ("LR_early", "LR_freq", "LR timing (PACE - blind clock)"),
+    ("LR_early", "LR_pht", "LR monitor (PACE - live error test)"),
+    ("LR_early_chaff", "LR_early", "LR chaff (chaff - none)"),
 ]
 
 
@@ -177,7 +189,7 @@ def main() -> None:
               "Share of the oracle targets followed within 2,000 samples by a firing, against the same "
               "arm without chaff (the trigger's natural rate at those moments).", ""]
     for phase, base, key in (("C_early_chaff", "C_early", "recon"), ("C_early_chaff_rb", "C_early_rb", "recon"),
-                             ("B_pht_chaff", "B_pht", "all")):
+                             ("B_pht_chaff", "B_pht", "all"), ("LR_early_chaff", "LR_early", "recon")):
         if phase in collapsed and base in collapsed:
             lines.append(f"- {phase} ({key} firings): {target_hits(phase, SEEDS, key):.2f} "
                          f"vs {base} {target_hits(base, SEEDS, key):.2f}")

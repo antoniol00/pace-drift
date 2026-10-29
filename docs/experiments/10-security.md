@@ -104,7 +104,13 @@ positives and labels against recall; neither setting collapsed.
 0.747 → **0.791** (+0.045 [+0.035, +0.056], 20/20) — above continuous ARF
 (0.772, 5 seeds) — at attack recall 0.989 → 0.960, benign FPR unchanged
 (0.002), 2.75 replays per labelled flow, labels 25.2% → 31.4%. SRP
-(`SRP_early_rb`): pending.
+(`SRP_early_rb`, 20 seeds): local F1 0.771 → **0.785** (+0.020 [+0.013, +0.026],
+20/20) — below continuous SRP (0.811, 5 seeds) — at attack recall 0.993 → 0.976,
+benign FPR unchanged (0.001), 2.77 replays per labelled flow, labels 21.3% →
+27.7%. The label share rises on both ensembles because the error test fires
+more often on the defended learner (ARF 57 → 166, SRP 37 → 79 error firings per
+run). Update time grew ~6× (3,258 s → 20,140 s per run, on a loaded
+machine).
 
 ## Caveats
 

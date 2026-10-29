@@ -52,7 +52,13 @@ Definitions over rolling-F1 snapshots taken every `snap_interval` samples (windo
 - **Chaff** (`chaff_schedule`, `chaff_size`, `chaff_pool`): `data/stream.py:inject_chaff` inserts benign-labelled flows (raw label `CHAFF`) whose every feature is copied from a different benign flow of the first `chaff_pool` benign flows. Chaff is classified, feeds both tests and is learned from inside windows, but is excluded from rolling F1, accuracy, snapshots, traces and the stream index, so every arm is scored on the same real flows.
 - **Window rebalancing** (`rebalance_prior`, `replay_size`): `models/rebalance.py:WindowRebalancer` keeps per-class reservoirs (Algorithm R) of every labelled flow the learner sees; after each flow learned in a window it replays flows of the under-represented class until the window's attack share is in `(prior − 1/n, prior]`; counts reset on every firing. The anchor's prior is the pretraining attack share (0.134). `summary.json:learned` records what the learner was fed, replays separately.
 
-## 6. Cost accounting
+## 6. Label delay and the linear learner
+
+- **Label delay** (`label_delay`, in flows): `experiments/runner.py` queues each flow as `[x, y, error, selected]`; it leaves the queue `label_delay` flows after it arrived, and only then does the error test (live PHT, or PACE's class PHT) count its error and, if a window selected it on arrival, the learner learn it (with any rebalancing replays). Windows still select the flows arriving after a firing, so the label budget is unchanged. The monitor and the blind clock need no label. With 0 every run is identical to before.
+- **Label-matched clock** (`*_freq_lab*`): under delay PACE's firings cluster and restart windows, so a count-matched clock (never overlapping) learns from far more of the stream (61–99.8% vs 34–41%). Its interval is `train_window / share`, the share being the matching `*_early` arm's mean labelled share over its ten seeds, pinned per dataset (anchor in the phase YAML, others under `by_phase`).
+- **Linear learner** (`LR_*`, `models/streaming.py`): river `StandardScaler | SoftmaxRegression` (defaults). Deterministic given the stream, so its seeds vary only the monitor's initialisation and the chaff draw.
+
+## 7. Cost accounting
 
 - Per-sample latency measured with `time.perf_counter()` around the full processing of each evaluated sample; reported p50/p95/p99/max.
 - Component breakdown: `hat_inference`, `hat_update`, `monitor`, `other` (sample time not covered by a section).

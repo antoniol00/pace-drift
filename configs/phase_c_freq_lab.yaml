@@ -1,0 +1,7 @@
+phase: C_freq_lab
+# Label-matched blind clock. Under label delay the count-matched clock (C_freq)
+# learns from far more of the stream than C_early, whose firings cluster and restart
+# windows, so this clock matches its labelled share instead: interval = train_window /
+# share. CIC-IDS2017: C_early learned from 0.2914 of the stream (ten seeds) -> 5000 / 0.2914
+# = 17157; CIC-IDS2018 pins its own in its profile's by_phase block.
+periodic_adapt_interval: 17157

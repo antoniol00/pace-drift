@@ -1,3 +1,4 @@
 phase: LR_freq
-# Blind clock on the logistic regression; interval calibrated to LR_early's fire count.
-periodic_adapt_interval: 12000
+# Blind clock on the logistic regression: 1.95M evaluated samples / 7694 -> 253 fires
+# vs LR_early's 253.4 (mean over its twenty seeds).
+periodic_adapt_interval: 7694

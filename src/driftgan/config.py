@@ -57,6 +57,10 @@ VALID_PHASES = (
     # HAT and ARF with labels arriving 5,000 or 50,000 flows late.
     "C_early_d5k", "B_pht_d5k", "C_freq_d5k", "ARF_early_d5k", "ARF_pht_d5k", "ARF_freq_d5k",
     "C_early_d50k", "B_pht_d50k", "C_freq_d50k", "ARF_early_d50k", "ARF_pht_d50k", "ARF_freq_d50k",
+    # Under delay PACE's firings cluster, so a count-matched clock learns from far
+    # more of the stream; these clocks match PACE's labelled share instead.
+    "C_freq_lab", "C_freq_lab_d5k", "C_freq_lab_d50k",
+    "ARF_freq_lab", "ARF_freq_lab_d5k", "ARF_freq_lab_d50k",
     # A single online logistic regression in place of the tree: PACE, the live
     # error test, the blind clock, the defence and the chaff adversary.
     "LR_early", "LR_pht", "LR_freq", "LR_early_rb", "LR_early_chaff", "LR_early_chaff_rb",
