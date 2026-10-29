@@ -21,7 +21,7 @@ CONTINUOUS_PHASES = ("ARF", "SRP")
 
 
 def make_model(config: ExperimentConfig, phase: str, seed: int) -> Any:
-    """Return the classifier for ``phase`` (HAT unless a SOTA ensemble is named).
+    """Return the classifier for ``phase`` (HAT unless an ensemble or ``LR`` is named).
 
     Dispatch is by prefix so budget-matched variants (``ARF_sched``, ``SRP_sched``)
     reuse the same ensemble as ``ARF`` / ``SRP``.
@@ -34,4 +34,11 @@ def make_model(config: ExperimentConfig, phase: str, seed: int) -> Any:
         from river import ensemble
 
         return ensemble.SRPClassifier(seed=seed)
+    if phase.startswith("LR"):
+        # A single linear model, to test whether collapse is specific to the tree.
+        # Softmax regression over two classes is logistic regression, and it takes
+        # the string labels; flow features span orders of magnitude, so standardise.
+        from river import linear_model, preprocessing
+
+        return preprocessing.StandardScaler() | linear_model.SoftmaxRegression()
     return make_hat(config, seed)

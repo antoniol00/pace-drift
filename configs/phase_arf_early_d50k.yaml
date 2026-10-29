@@ -1,0 +1,19 @@
+phase: ARF_early_d50k
+# ARF_early with labels delayed by 50,000 flows (about 45 minutes of capture at the
+# ~1,100 flows per minute of either window): the error tests and the learner wait for labels,
+# the monitor does not. See docs/experiments/11-delay-and-linear.md.
+label_delay: 50000
+# Experiment #3c: SOTA ensemble base learner (ARF_early) driven by C_early's proactive
+# dual (recon + class) PHT — same AE monitor + calibration as C_early. Learns
+# only in triggered windows. Tests whether early detection helps the strongest
+# model (vs ARF_early_sched reactive at the same regime).
+monitor_type: ae
+monitor_interval: 1000
+monitor_epochs: 5
+monitor_hidden: 32
+monitor_latent: 16
+monitor_clip: 10.0
+recon_pht_delta: 0.0005
+recon_pht_threshold: 0.1
+recon_pht_min_instances: 10
+lead_horizon: 20000

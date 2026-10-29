@@ -163,3 +163,19 @@ def test_rebalanced_window_feeds_the_prior(base_config):
     fed = fed_attack + result.learned.get("BENIGN", 0) + result.learned.get("replay_BENIGN", 0)
     assert result.learned.get("replay_BENIGN", 0) > 0
     assert fed_attack / fed <= 0.2 + 1e-9
+
+
+def test_label_delay_shifts_the_error_test(base_config):
+    """Until the first firing nothing is learned, so the error sequence is the
+    same and a delayed error test fires exactly ``label_delay`` flows later."""
+    immediate = run_phase(base_config("B_pht"), seed=0, write_outputs=False)
+    delayed = run_phase(base_config("B_pht_d5k", label_delay=200), seed=0, write_outputs=False)
+    assert delayed.drift_indices[0] == immediate.drift_indices[0] + 200
+
+
+def test_labels_that_never_arrive_are_never_learned(base_config):
+    """The monitor needs no label: with every label still in flight PACE can fire
+    only from it, opens windows, and the learner is fed nothing."""
+    result = run_phase(base_config("C_early_d5k", label_delay=N_ROWS), seed=0, write_outputs=False)
+    assert result.learned == {}
+    assert result.drift_events and {e["source"] for e in result.drift_events} == {"recon"}

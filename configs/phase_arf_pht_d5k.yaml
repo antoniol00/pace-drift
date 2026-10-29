@@ -1,0 +1,10 @@
+phase: ARF_pht_d5k
+# ARF_pht with labels delayed by 5,000 flows (about 5 minutes of capture at the
+# ~1,100 flows per minute of either window): the error tests and the learner wait for labels,
+# the monitor does not. See docs/experiments/11-delay-and-linear.md.
+label_delay: 5000
+# Live reactive control for ARF. ARF_sched replays the schedule recorded from a
+# live HAT pass, whereas ARF_early's error Page-Hinkley watches ARF's own error,
+# so ARF_early vs ARF_sched changes two things at once. This arm runs the same
+# error Page-Hinkley (pht_delta, river defaults otherwise) live on ARF's own
+# predictions with no monitor: ARF_early vs ARF_pht isolates the monitor.

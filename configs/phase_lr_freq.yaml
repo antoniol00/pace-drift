@@ -1,0 +1,3 @@
+phase: LR_freq
+# Blind clock on the logistic regression; interval calibrated to LR_early's fire count.
+periodic_adapt_interval: 12000

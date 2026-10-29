@@ -179,7 +179,7 @@ def run_phase(
             )
         else:
             trigger = DynamicPHTTrigger(delta=config.pht_delta)
-    elif phase.startswith("B_pht") or phase in ("ARF_pht", "SRP_pht"):
+    elif phase.startswith(("B_pht", "ARF_pht", "SRP_pht", "LR_pht")):
         # always live: the point of these arms is the learner's own error signal,
         # so a drift_schedule in the config must never turn them into replays
         trigger = DynamicPHTTrigger(delta=config.pht_delta)
@@ -193,7 +193,7 @@ def run_phase(
         trigger = PeriodicTrigger(
             interval=config.periodic_adapt_interval, start_after=config.n_pretrain
         )
-    elif phase.startswith(("C_early", "ARF_early", "SRP_early")):
+    elif phase.startswith(("C_early", "ARF_early", "SRP_early", "LR_early")):
         # proactive dual (recon+class) trigger; base learner varies by phase
         dual = DualPHT(
             class_delta=config.pht_delta,
@@ -222,6 +222,9 @@ def run_phase(
     label_dist: Counter[str] = Counter()
     learned: Counter[str] = Counter()  # what the learner is fed after pretraining
     recent_buffer: deque[tuple[dict[str, float], str, str]] = deque(maxlen=config.buffer_size)
+    # Flows awaiting their label: [x, y, error, selected for learning]. A flow
+    # leaves the queue label_delay flows after it arrived; with no delay, at once.
+    awaiting: deque[list[Any]] = deque()
     training_enabled = False
     samples_to_train = 0
     n_processed = 0
@@ -283,23 +286,28 @@ def run_phase(
                 acc.update(y, y_pred)
             error = 0 if y_pred == y else 1
             recent_buffer.append((x, y, y_raw))
+            arriving = [x, y, error, continuous]
+            awaiting.append(arriving)
+            labelled = awaiting.popleft() if len(awaiting) > config.label_delay else None
 
             fired = False
             fire_source = ""
             if continuous:
                 pass  # ARF/SRP self-adapt; learning happens every sample below
+            elif isinstance(trigger, PeriodicTrigger):
+                fired = trigger.update(n_processed, error)  # blind: needs no label
+                fire_source = "periodic"
             elif trigger is not None:
-                fired = trigger.update(n_processed, error)
+                # error tests count a mistake only once its label has arrived
+                fired = labelled is not None and trigger.update(n_processed, labelled[2])
                 if isinstance(trigger, ScheduledDriftTrigger):
                     fire_source = "schedule"
-                elif isinstance(trigger, PeriodicTrigger):
-                    fire_source = "periodic"
                 elif isinstance(trigger, DynamicDetectorTrigger):
                     fire_source = trigger.name
                 else:
                     fire_source = "pht"
             elif dual is not None:
-                if dual.update_class(n_processed, error):
+                if labelled is not None and dual.update_class(n_processed, labelled[2]):
                     fired = True
                     fire_source = "class"
                 if not chaff and n_processed in oracle:
@@ -327,21 +335,24 @@ def run_phase(
                         index=n_processed, source=fire_source,
                     )
 
-            if continuous:
-                with tracker.section("hat_update"):
-                    model.learn_one(x, y)
-            elif training_enabled:
-                with tracker.section("hat_update"):
-                    model.learn_one(x, y)
-                    learned[y] += 1
-                    if rebalancer is not None:
-                        for xr, yr in rebalancer.top_up(y):
-                            model.learn_one(xr, yr)
-                            learned[f"replay_{yr}"] += 1
-                        rebalancer.remember(x, y)
+            # An open window selects the arriving flow for labelling; the learner
+            # is fed each selected flow when its label arrives.
+            if training_enabled:
+                arriving[3] = True
                 samples_to_train -= 1
                 if samples_to_train <= 0:
                     training_enabled = False
+            if labelled is not None and labelled[3]:
+                xl, yl = labelled[0], labelled[1]
+                with tracker.section("hat_update"):
+                    model.learn_one(xl, yl)
+                    if not continuous:
+                        learned[yl] += 1
+                        if rebalancer is not None:
+                            for xr, yr in rebalancer.top_up(yl):
+                                model.learn_one(xr, yr)
+                                learned[f"replay_{yr}"] += 1
+                            rebalancer.remember(xl, yl)
 
         interval_time += tracker.last_latency_ms
         if chaff:

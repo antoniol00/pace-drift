@@ -53,6 +53,13 @@ VALID_PHASES = (
     # Sensitivity of the defence to its prior: balanced windows (0.5), which need
     # no knowledge of the base rate.
     "C_early_rb50", "C_early_chaff_rb50",
+    # Label delay (in flows): the live arms of the timing and monitor contrasts on
+    # HAT and ARF with labels arriving 5,000 or 50,000 flows late.
+    "C_early_d5k", "B_pht_d5k", "C_freq_d5k", "ARF_early_d5k", "ARF_pht_d5k", "ARF_freq_d5k",
+    "C_early_d50k", "B_pht_d50k", "C_freq_d50k", "ARF_early_d50k", "ARF_pht_d50k", "ARF_freq_d50k",
+    # A single online logistic regression in place of the tree: PACE, the live
+    # error test, the blind clock, the defence and the chaff adversary.
+    "LR_early", "LR_pht", "LR_freq", "LR_early_rb", "LR_early_chaff", "LR_early_chaff_rb",
 )
 
 
@@ -129,6 +136,10 @@ class ExperimentConfig:
     # under-represented class. None disables it.
     rebalance_prior: float | None = None
     replay_size: int = 5_000  # per-class reservoir of labelled samples to replay
+    # Label delay, in flows: a flow's label (what the error tests count and the
+    # learner is fed) arrives this many flows after the flow is classified. The
+    # monitor needs no label and still sees each flow at once. 0 = immediate.
+    label_delay: int = 0
 
     # Metrics / instrumentation
     rolling_f1_window: int = 5_000
