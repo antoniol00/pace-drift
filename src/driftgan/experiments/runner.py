@@ -38,7 +38,7 @@ from river import drift as river_drift
 from river import metrics as river_metrics
 
 from driftgan.config import ExperimentConfig
-from driftgan.data.stream import ATTACK, BENIGN, stream_csv
+from driftgan.data.stream import ATTACK, BENIGN, CHAFF, inject_chaff, stream_csv
 from driftgan.drift.schedule import (
     DynamicDetectorTrigger,
     DynamicPHTTrigger,
@@ -55,6 +55,7 @@ from driftgan.logging import get_logger, log_ctx
 from driftgan.metrics.cost import CostTracker
 from driftgan.metrics.recovery import compute_recovery_events, save_recovery
 from driftgan.metrics.rolling import RollingBinaryStats
+from driftgan.models.rebalance import WindowRebalancer
 from driftgan.models.streaming import CONTINUOUS_PHASES, make_model
 
 logger = get_logger("driftgan.runner")
@@ -80,6 +81,7 @@ class RunResult:
     lead_time_report: dict[str, Any] | None = None
     cost_summary: dict[str, Any] = field(default_factory=dict)
     label_dist: dict[str, int] = field(default_factory=dict)
+    learned: dict[str, int] = field(default_factory=dict)
 
 
 def _make_monitor(config: ExperimentConfig, seed: int) -> ReconstructionMonitor | ShiftMonitor:
@@ -169,6 +171,7 @@ def run_phase(
     ) = None
     dual: DualPHT | None = None
     monitor: ReconstructionMonitor | ShiftMonitor | None = None
+    oracle: set[int] = set()
     if phase in ("B", "C", "C_prime", "C_cond", "ARF_sched", "SRP_sched"):
         if config.drift_schedule and not force_dynamic:
             trigger = ScheduledDriftTrigger(
@@ -176,7 +179,7 @@ def run_phase(
             )
         else:
             trigger = DynamicPHTTrigger(delta=config.pht_delta)
-    elif phase in ("B_pht", "ARF_pht", "SRP_pht"):
+    elif phase.startswith("B_pht") or phase in ("ARF_pht", "SRP_pht"):
         # always live: the point of these arms is the learner's own error signal,
         # so a drift_schedule in the config must never turn them into replays
         trigger = DynamicPHTTrigger(delta=config.pht_delta)
@@ -184,13 +187,13 @@ def run_phase(
         trigger = DynamicDetectorTrigger(river_drift.ADWIN(), name="adwin")
     elif phase == "B_kswin":
         trigger = DynamicDetectorTrigger(river_drift.KSWIN(seed=seed), name="kswin")
-    elif phase.endswith("_freq"):
+    elif "_freq" in phase:
         # C_freq (HAT) and the ensemble frequency-matched controls ARF_freq /
         # SRP_freq: adapt on a blind periodic clock, count-matched to *_early.
         trigger = PeriodicTrigger(
             interval=config.periodic_adapt_interval, start_after=config.n_pretrain
         )
-    elif phase.startswith("C_early") or phase in ("ARF_early", "SRP_early"):
+    elif phase.startswith(("C_early", "ARF_early", "SRP_early")):
         # proactive dual (recon+class) trigger; base learner varies by phase
         dual = DualPHT(
             class_delta=config.pht_delta,
@@ -198,7 +201,15 @@ def run_phase(
             recon_threshold=config.recon_pht_threshold,
             recon_min_instances=config.recon_pht_min_instances,
         )
-        monitor = _make_monitor(config, seed)
+        if config.adversary_schedule:
+            # the oracle adversary decides when the monitor branch fires
+            oracle = set(load_schedule(config.adversary_schedule).indices)
+        else:
+            monitor = _make_monitor(config, seed)
+    rebalancer = (
+        WindowRebalancer(config.rebalance_prior, size=config.replay_size, seed=seed)
+        if config.rebalance_prior is not None else None
+    )
 
     # ── state ────────────────────────────────────────────────────────
     snap_indices: list[int] = []
@@ -209,6 +220,7 @@ def run_phase(
     interval_time = 0.0
     drift_events: list[dict[str, Any]] = []
     label_dist: Counter[str] = Counter()
+    learned: Counter[str] = Counter()  # what the learner is fed after pretraining
     recent_buffer: deque[tuple[dict[str, float], str, str]] = deque(maxlen=config.buffer_size)
     training_enabled = False
     samples_to_train = 0
@@ -233,10 +245,17 @@ def run_phase(
         max_rows=config.max_samples,
         benign_label=config.benign_label,
     )
+    if config.chaff_schedule:
+        stream = inject_chaff(
+            stream, load_schedule(config.chaff_schedule).indices, config.chaff_size,
+            pool_size=config.chaff_pool, seed=seed,
+        )
 
     # ── pre-training ─────────────────────────────────────────────────
     for x, y, y_raw in stream:
         model.learn_one(x, y)
+        if rebalancer is not None:
+            rebalancer.remember(x, y)
         label_dist[y_raw] += 1
         n_processed += 1
         if n_processed >= config.n_pretrain:
@@ -245,15 +264,23 @@ def run_phase(
 
     # ── prequential evaluation ───────────────────────────────────────
     for x, y, y_raw in stream:
-        n_processed += 1
-        label_dist[y_raw] += 1
+        # Chaff is traffic the detector sees, classifies and may learn from, but
+        # it is kept out of the metrics and the index, so every arm is scored on
+        # the same real flows.
+        chaff = y_raw == CHAFF
+        if chaff:
+            label_dist[CHAFF] += 1
+        else:
+            n_processed += 1
+            label_dist[y_raw] += 1
 
         with tracker.sample():
             with tracker.section("hat_inference"):
                 y_pred = str(model.predict_one(cast("dict[Any, Any]", x)) or BENIGN)
 
-            rolling.update(y, y_pred)
-            acc.update(y, y_pred)
+            if not chaff:
+                rolling.update(y, y_pred)
+                acc.update(y, y_pred)
             error = 0 if y_pred == y else 1
             recent_buffer.append((x, y, y_raw))
 
@@ -275,6 +302,10 @@ def run_phase(
                 if dual.update_class(n_processed, error):
                     fired = True
                     fire_source = "class"
+                if not chaff and n_processed in oracle:
+                    dual.recon_fires.append(n_processed)
+                    fired = True
+                    fire_source = "recon" if fire_source == "" else "recon+class"
                 if monitor is not None:
                     with tracker.section("monitor"):
                         recon_err = monitor.observe(x, n_processed)
@@ -287,6 +318,8 @@ def run_phase(
             if fired:
                 training_enabled = True
                 samples_to_train = config.train_window
+                if rebalancer is not None:
+                    rebalancer.start_window()
                 drift_events.append({"index": n_processed, "source": fire_source})
                 if len(drift_events) <= 30:
                     log_ctx(
@@ -300,11 +333,19 @@ def run_phase(
             elif training_enabled:
                 with tracker.section("hat_update"):
                     model.learn_one(x, y)
+                    learned[y] += 1
+                    if rebalancer is not None:
+                        for xr, yr in rebalancer.top_up(y):
+                            model.learn_one(xr, yr)
+                            learned[f"replay_{yr}"] += 1
+                        rebalancer.remember(x, y)
                 samples_to_train -= 1
                 if samples_to_train <= 0:
                     training_enabled = False
 
         interval_time += tracker.last_latency_ms
+        if chaff:
+            continue
 
         if trace_writer is not None:
             trace_writer.writerow([n_processed, y, y_raw, y_pred, 1 - error])
@@ -366,6 +407,7 @@ def run_phase(
         lead_time_report=lead_report,
         cost_summary=tracker.summary(),
         label_dist=dict(label_dist),
+        learned=dict(learned),
     )
 
     if write_outputs:
@@ -431,6 +473,7 @@ def _write_outputs(config: ExperimentConfig, result: RunResult, tracker: CostTra
         "final_acc": result.final_acc,
         "final_f1": result.final_f1,
         "n_drifts": len(result.drift_indices),
+        "learned": result.learned,
         **{k: v for k, v in result.cost_summary.items() if k.startswith(("latency", "peak", "time"))},
     }
     with open(run_dir / "summary.json", "w", encoding="utf-8") as f:

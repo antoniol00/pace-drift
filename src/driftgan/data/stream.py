@@ -7,12 +7,14 @@ from __future__ import annotations
 
 import csv
 import math
-from collections.abc import Iterator
+import random
+from collections.abc import Iterable, Iterator
 
 Sample = tuple[dict[str, float], str, str]  # (features, binary label, raw subtype label)
 
 BENIGN = "BENIGN"
 ATTACK = "ATTACK"
+CHAFF = "CHAFF"  # raw label of injected chaff; its binary label is BENIGN
 
 
 def preprocess_row(
@@ -75,3 +77,33 @@ def stream_csv(
             count += 1
             if max_rows is not None and count >= max_rows:
                 break
+
+
+def inject_chaff(
+    stream: Iterable[Sample],
+    before: Iterable[int],
+    size: int,
+    pool_size: int = 10_000,
+    seed: int = 0,
+) -> Iterator[Sample]:
+    """Insert ``size`` chaff flows before each original stream index in ``before``.
+
+    Chaff models an adversary that sends traffic built to look unusual to an
+    input monitor without being malicious. Each chaff flow copies every feature
+    from a different benign flow among the first ``pool_size`` benign flows of
+    the stream, so each value is individually plausible while the joint
+    structure is broken. Chaff is labelled benign, with raw label ``CHAFF`` so
+    the runner can keep it out of the metrics. Indices are 1-based over the
+    original stream, as in the drift schedules.
+    """
+    rng = random.Random(seed)
+    targets = set(before)
+    pool: list[dict[str, float]] = []
+    for i, (x, y, y_raw) in enumerate(stream, start=1):
+        if i in targets and pool:
+            keys = list(pool[0])
+            for _ in range(size):
+                yield {k: pool[rng.randrange(len(pool))].get(k, 0.0) for k in keys}, BENIGN, CHAFF
+        if y == BENIGN and len(pool) < pool_size:
+            pool.append(x)
+        yield x, y, y_raw

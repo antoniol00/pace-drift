@@ -1,0 +1,7 @@
+phase: B_pht_chaff_rb
+# Live error test under chaff, with the window-rebalancing defence.
+chaff_schedule: results/adversary/cicids2017_attack.json  # same targets as the oracle
+chaff_size: 1000             # one monitor check interval of chaff per target
+rebalance_prior: 0.134       # attack share of the 50K pretraining labels of the CIC-IDS2017
+                             # window (0.1337): known to the defender, no lookahead
+replay_size: 5000

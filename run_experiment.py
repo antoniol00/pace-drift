@@ -48,6 +48,21 @@ PHASE_CONFIG = {
     "SRP_early": "phase_srp_early.yaml",
     "ARF_freq": "phase_arf_freq.yaml",
     "SRP_freq": "phase_srp_freq.yaml",
+    "C_early_adv": "phase_c_early_adv.yaml",
+    "C_early_advb": "phase_c_early_advb.yaml",
+    "C_early_chaff": "phase_c_early_chaff.yaml",
+    "B_pht_chaff": "phase_b_pht_chaff.yaml",
+    "C_early_rb": "phase_c_early_rb.yaml",
+    "B_pht_rb": "phase_b_pht_rb.yaml",
+    "C_early_adv_rb": "phase_c_early_adv_rb.yaml",
+    "C_early_chaff_rb": "phase_c_early_chaff_rb.yaml",
+    "C_early_advb_rb": "phase_c_early_advb_rb.yaml",
+    "C_freq_rb": "phase_c_freq_rb.yaml",
+    "ARF_early_rb": "phase_arf_early_rb.yaml",
+    "SRP_early_rb": "phase_srp_early_rb.yaml",
+    "B_pht_chaff_rb": "phase_b_pht_chaff_rb.yaml",
+    "C_early_rb50": "phase_c_early_rb50.yaml",
+    "C_early_chaff_rb50": "phase_c_early_chaff_rb50.yaml",
 }
 
 

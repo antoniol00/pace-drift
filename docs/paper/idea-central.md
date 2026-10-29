@@ -12,10 +12,16 @@ whichever drift detector is bolted onto a streaming classifier.
 > are: timing, not frequency, carries the gain (+0.042 [+0.008, +0.077]); under
 > immediate labels the label-free signal does not beat a live error test
 > (+0.021 [−0.002, +0.045]); and every stream-responsive trigger can collapse a single-tree detector into an
-> alert flood, which makes the trigger safety-critical and, because an
-> unsupervised trigger fires on traffic anyone can send, a potential attack
-> surface (discussed, **not evaluated** — never claim an attack was shown).
-> Label delay and an adversary steering the trigger are the next experiments.
+> alert flood, which makes the trigger security-critical. The security
+> evaluation ([10](../experiments/10-security.md), HAT, CIC-IDS2017, 20 seeds)
+> shows an adversary can **induce** it with clean labels: feature-space chaff
+> (1.6% of traffic) collapses PACE 14/20 and the live error test 15/20 (vs 4
+> and 8) — label-driven triggers are **not** harder to steer — and an oracle
+> that opens attack-free windows blinds the detector. **Window rebalancing**
+> (replay to pin each window's attack share at the pretraining 0.134) removed
+> every collapse (0/140) and lifted local F1 by +0.13 to +0.24. Do not claim
+> problem-space realisability of the chaff, or robustness to an adversary who
+> adapts to the defence. Label delay is the next experiment.
 
 ## The problem
 
@@ -120,6 +126,19 @@ to unsupervised triggers: the live error test alone collapses HAT on 8/20, a fix
 replayed schedule only 2/20 (no feedback), and the ensembles never. The contribution here is the criterion and the fragility it
 exposes, not a ranking that favours us.
 
+**An adversary can pull the lever, and pinning the window stops it.** Chaff
+— benign-labelled flows whose features are each copied from a different benign
+flow, 1.6% of the traffic, timed to the attacker's campaign — fires the monitor
+near 65% of its targets and the error test near 88%, and raises collapse from
+4 to 14 (PACE, p = 0.004) and 8 to 15 (live error test) of 20. Placement
+alone (an oracle at the monitor's budget) is weaker and not resolved at 20
+seeds; steered toward attack-free windows it blinds the detector (10/20 runs
+miss a third of the attacks). Replaying stored labelled flows so each window
+teaches the pretraining class ratio removed every collapse, natural and
+adversarial, at no label cost; under it timing still matters (+0.024
+[+0.007, +0.042]) and the monitor still does not resolve over the live error
+test (+0.018 [−0.003, +0.038]).
+
 ## What we do not claim
 
 - ❌ A novel drift detector. The signal family is prior art, and we cite it.
@@ -130,6 +149,9 @@ exposes, not a ranking that favours us.
   others. It is an observation, reported as one.
 - ❌ Generalisation beyond CICFlowMeter-family flow features and prequential
   evaluation with immediate labels.
+- ❌ That the chaff can be realised as packets (it is built in feature space),
+  that the defence resists an adversary who knows it, or that the adversary
+  results hold beyond HAT on CIC-IDS2017.
 
 ## In one sentence
 

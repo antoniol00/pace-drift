@@ -40,6 +40,19 @@ VALID_PHASES = (
     # sliding window and AUC threshold, so the comparison does not depend on our
     # window bookkeeping.
     "C_early_d3", "C_early_d3_native", "C_early_d3_sized", "C_early_hdddm",
+    # Security evaluation on the anchor. A trigger-aware adversary steers the
+    # monitor branch, either as an oracle that chooses when it fires (toward
+    # attack-dense windows, "adv", or benign windows just before a burst, "advb")
+    # or by injecting chaff the real monitor sees ("chaff"). "_rb" arms add the
+    # window-rebalancing defence.
+    "C_early_adv", "C_early_advb", "C_early_chaff", "B_pht_chaff",
+    "C_early_rb", "B_pht_rb", "C_early_adv_rb", "C_early_chaff_rb",
+    # The defence against the evasion oracle, on the blind clock (does timing
+    # still matter once the training distribution is pinned?) and on the ensembles.
+    "C_early_advb_rb", "C_freq_rb", "ARF_early_rb", "SRP_early_rb", "B_pht_chaff_rb",
+    # Sensitivity of the defence to its prior: balanced windows (0.5), which need
+    # no knowledge of the base rate.
+    "C_early_rb50", "C_early_chaff_rb50",
 )
 
 
@@ -102,6 +115,20 @@ class ExperimentConfig:
     d3_rho: float = 0.1  # size of the "new" slice as a fraction of d3_w
     d3_tau: float = 0.7  # AUC above which drift is declared
     hdddm_bins: int | None = None  # histogram bins per feature (None -> sqrt(n))
+
+    # Trigger-aware adversary. An oracle fires the monitor branch at the indices
+    # of ``adversary_schedule`` instead of running a monitor; a chaff adversary
+    # inserts ``chaff_size`` benign-labelled flows before each index of
+    # ``chaff_schedule`` and leaves the real monitor to react to them.
+    adversary_schedule: str | None = None
+    chaff_schedule: str | None = None
+    chaff_size: int = 1_000
+    chaff_pool: int = 10_000  # benign flows the chaff generator draws feature values from
+    # Window-rebalancing defence: pin the attack share of what the learner is fed
+    # inside triggered windows to this prior by replaying stored samples of the
+    # under-represented class. None disables it.
+    rebalance_prior: float | None = None
+    replay_size: int = 5_000  # per-class reservoir of labelled samples to replay
 
     # Metrics / instrumentation
     rolling_f1_window: int = 5_000

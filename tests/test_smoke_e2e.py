@@ -134,3 +134,32 @@ def test_phase_c_early_produces_lead_report(base_config):
     assert lead_path.exists()
     loaded = json.loads(lead_path.read_text())
     assert loaded["n_class_fires"] == len(loaded["class_fires"])
+
+
+def test_oracle_adversary_fires_the_monitor_branch(base_config, tmp_path):
+    """The oracle replaces the monitor: its indices appear as recon fires."""
+    path = tmp_path / "adv.json"
+    DriftSchedule(indices=[3_100, 4_100], source="adversary_attack").save(path)
+    result = run_phase(base_config("C_early_adv", adversary_schedule=str(path)), seed=0)
+    assert result.lead_time_report is not None
+    assert result.lead_time_report["recon_fires"] == [3_100, 4_100]
+    assert {3_100, 4_100} <= set(result.drift_indices)
+
+
+def test_chaff_stays_out_of_the_metrics(base_config, tmp_path):
+    path = tmp_path / "chaff.json"
+    DriftSchedule(indices=[2_000, 3_000], source="adversary_attack").save(path)
+    config = base_config("C_early_chaff", chaff_schedule=str(path), chaff_size=300, chaff_pool=500)
+    result = run_phase(config, seed=0)
+    assert result.n_processed == N_ROWS
+    assert result.label_dist["CHAFF"] == 600
+    assert len(result.snap_indices) == (N_ROWS - PRETRAIN) // 100
+
+
+def test_rebalanced_window_feeds_the_prior(base_config):
+    """With the defence, what the learner is fed keeps the pinned attack share."""
+    result = run_phase(base_config("B_pht_rb", rebalance_prior=0.2), seed=0)
+    fed_attack = result.learned.get("ATTACK", 0) + result.learned.get("replay_ATTACK", 0)
+    fed = fed_attack + result.learned.get("BENIGN", 0) + result.learned.get("replay_BENIGN", 0)
+    assert result.learned.get("replay_BENIGN", 0) > 0
+    assert fed_attack / fed <= 0.2 + 1e-9

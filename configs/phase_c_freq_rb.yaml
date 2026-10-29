@@ -1,0 +1,7 @@
+phase: C_freq_rb
+# Blind clock with the window-rebalancing defence: does informed placement still
+# beat blind placement once what the learner is fed is pinned?
+periodic_adapt_interval: 12000   # identical to phase_c_freq.yaml
+rebalance_prior: 0.134       # attack share of the 50K pretraining labels of the CIC-IDS2017
+                             # window (0.1337): known to the defender, no lookahead
+replay_size: 5000

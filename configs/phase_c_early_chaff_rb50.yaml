@@ -1,0 +1,15 @@
+phase: C_early_chaff_rb50
+# Chaff adversary against the window-rebalancing defence at a balanced prior.
+chaff_schedule: results/adversary/cicids2017_attack.json  # same targets as the oracle
+chaff_size: 1000             # one monitor check interval of chaff per target
+rebalance_prior: 0.5         # balanced windows: no knowledge of the base rate (sensitivity of the defence)
+replay_size: 5000
+monitor_interval: 1000
+monitor_epochs: 5
+monitor_hidden: 32
+monitor_latent: 16
+monitor_clip: 10.0
+recon_pht_delta: 0.0005      # PACE operating point, identical to phase_c_early.yaml
+recon_pht_threshold: 0.1
+recon_pht_min_instances: 10
+lead_horizon: 20000

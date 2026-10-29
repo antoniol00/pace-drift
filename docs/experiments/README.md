@@ -27,6 +27,7 @@ drift-dense regions where strategies actually diverge.
 | 7 | [Unsupervised comparators](07-unsupervised-comparator.md) | Do published unsupervised detectors do the job as well? | **Within noise — and that is the point.** Every stream-responsive trigger on HAT, ours and the live error test included, collapses the loop on 20–60% of runs; ensembles do not (see [09](09-review-round-3.md)) |
 | 8 | [Controlled stream](08-synthetic-timing.md) | Does the core claim hold where drift is known by construction? | Timing **+0.254 / +0.288** (PCA / AE, 10 seeds) at an exactly matched budget; the monitor adds only ~+0.02 over the live error test |
 | 9 | [Third review round](09-review-round-3.md) | Do the claims survive clustered intervals, 20 seeds, a metric that sees benign windows, a converged D3 and stability controls? | Timing aggregate **[−0.003, +0.084]** under a hierarchical bootstrap (per-cell evidence carries it); HAT anchor vs schedule **+0.000** at 20 seeds; collapse hits **every stream-responsive trigger on HAT, incl. the live error test (8/20)**, needs feedback, and spares the ensembles |
+| 10 | [Security evaluation](10-security.md) | Can an adversary steer retraining into collapse, and does a defence stop it? | **Chaff (1.6% of traffic, clean labels) collapses PACE 14/20 and the live error test 15/20** (vs 4 and 8); an attack-free-window oracle blinds the detector; **window rebalancing: 0/140 collapses**, local F1 +0.13 to +0.24 |
 
 ## The argument in one paragraph
 

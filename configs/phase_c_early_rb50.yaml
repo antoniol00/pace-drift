@@ -1,0 +1,13 @@
+phase: C_early_rb50
+# PACE with the window-rebalancing defence at a balanced prior.
+rebalance_prior: 0.5         # balanced windows: no knowledge of the base rate (sensitivity of the defence)
+replay_size: 5000
+monitor_interval: 1000
+monitor_epochs: 5
+monitor_hidden: 32
+monitor_latent: 16
+monitor_clip: 10.0
+recon_pht_delta: 0.0005      # PACE operating point, identical to phase_c_early.yaml
+recon_pht_threshold: 0.1
+recon_pht_min_instances: 10
+lead_horizon: 20000

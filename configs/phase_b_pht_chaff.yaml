@@ -1,0 +1,5 @@
+phase: B_pht_chaff
+# The live error test under the same chaff: a label-driven trigger should not
+# respond to traffic that is correctly classified as benign.
+chaff_schedule: results/adversary/cicids2017_attack.json  # same targets as the oracle
+chaff_size: 1000             # one monitor check interval of chaff per target

@@ -1,0 +1,15 @@
+phase: SRP_early_rb
+# PACE on the ensemble with the window-rebalancing defence (does it cost quality?).
+rebalance_prior: 0.134       # attack share of the 50K pretraining labels of the CIC-IDS2017
+                             # window (0.1337): known to the defender, no lookahead
+replay_size: 5000
+monitor_type: ae
+monitor_interval: 1000
+monitor_epochs: 5
+monitor_hidden: 32
+monitor_latent: 16
+monitor_clip: 10.0
+recon_pht_delta: 0.0005
+recon_pht_threshold: 0.1
+recon_pht_min_instances: 10
+lead_horizon: 20000
