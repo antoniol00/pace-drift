@@ -92,7 +92,19 @@ blind clock) **+0.024 [+0.007, +0.042]**, 15/20, against +0.076 undefended —
 much of the undefended gap was the clock's own collapse; monitor (PACE − live
 error test) **+0.018 [−0.003, +0.038]** — still not resolved.
 
-Ensembles with the defence (`ARF_early_rb`, `SRP_early_rb`): pending.
+**Prior sensitivity** (`C_early_rb50`, `C_early_chaff_rb50`, π = 0.5, no
+knowledge of the base rate): 0/20 natural and 0/20 under chaff; benign FPR
+median 0.025 / 0.019, worst 0.034 / 0.024 (vs 0.009 / 0.014 at π = 0.134);
+recall 0.988 / 0.986; local F1 median 0.717 / 0.718 (paired vs undefended
++0.148 / +0.258); but the extra false alarms fire the error test more, so the
+label share rises to 45.2% / 48.7% (vs 33.2% / 39.3%). The prior trades false
+positives and labels against recall; neither setting collapsed.
+
+**Ensembles with the defence.** ARF (`ARF_early_rb`, 20 seeds): local F1
+0.747 → **0.791** (+0.045 [+0.035, +0.056], 20/20) — above continuous ARF
+(0.772, 5 seeds) — at attack recall 0.989 → 0.960, benign FPR unchanged
+(0.002), 2.75 replays per labelled flow, labels 25.2% → 31.4%. SRP
+(`SRP_early_rb`): pending.
 
 ## Caveats
 
@@ -105,4 +117,4 @@ Ensembles with the defence (`ARF_early_rb`, `SRP_early_rb`): pending.
 - No adaptive adversary against the defence (e.g. one targeting the
   reservoirs — although chaff does enter the benign reservoir in
   `C_early_chaff_rb`), and no slow/mimicry evasion of the trigger.
-- The prior 0.134 is the pretraining attack share; its sensitivity was not swept.
+- The prior 0.134 is the pretraining attack share; only one alternative (0.5) was run.
