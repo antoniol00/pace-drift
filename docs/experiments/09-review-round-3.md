@@ -50,3 +50,13 @@ scores near the threshold and the loop amplifies one changed firing): C_early
 seed 0 re-ran with 144 firings vs the stored 171, C_early_pca with 126 vs 172.
 The early PCA seeds 0–4 also logged ~1,900 s of monitor time from BLAS thread
 oversubscription; always set `OMP_NUM_THREADS=1` for parallel batches.
+
+## Residual consistency fixes (full-review pass)
+
+- Capacity contrast restated on the same 233 windows: ensembles +0.15–0.17 over
+  HAT (was "+0.13–0.16", which mixed in PACE's 169-firing arm); continuous
+  supervision adds +0.05–0.07 (was "+0.05–0.08").
+- Positioning table: INSOMNIA and SSF marked "per sample", Abdel Wahab
+  "continuous" — they do not gate learning to windows, as the text already said.
+- Core table (CIC-IDS2017, HAT, seeds 0–9) gains collapse counts: replayed
+  schedule 1/10, live error test 4/10, PACE 1/10.

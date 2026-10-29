@@ -58,12 +58,13 @@ straw man.
 
 Two clean contrasts fall out:
 
-- **Model capacity, at matched budget (233 adaptations):** ensembles 0.72–0.74 vs
-  HAT-based 0.57–0.60 → **+0.13–0.16**.
+- **Model capacity, on the same 233 windows:** ensembles 0.717 / 0.737 vs HAT
+  0.567 → **+0.15–0.17**. (PACE on HAT reaches 0.599, but with 169 firings, so it
+  is not a same-budget comparison.)
 - **Continuous supervision (233 → ~2M updates):** ARF 0.717→0.772, SRP
-  0.737→0.811 → only **+0.05–0.08**.
+  0.737→0.811 → only **+0.05–0.07**.
 
-So sparse triggered adaptation is label-efficient: the ensembles keep ~90–95% of
+So sparse triggered adaptation is label-efficient: the ensembles keep 91–93% of
 their continuous-learning quality on ~233 adaptations instead of ~2M.
 
 ### 3. The trigger transfers to the strongest learners
