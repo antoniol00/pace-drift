@@ -11,6 +11,8 @@
   fig15  closed-loop stability, per-seed cumulative accuracy
   fig16  timing (PACE - label-matched clock) under label delay
   fig17  security arms without / with window rebalancing, per-seed cumulative accuracy
+  fig18  the trigger at work on CICIDS2017: attack share, monitor score, error rate, windows
+  fig19  timing and monitor contrasts in every cell, paired 95% CIs
 (fig4 resources and fig5 sensitivity live in scripts/reviewer_analysis.py,
 fig7 in scripts/monitor_ablation.py; all three reuse the style defined here.)
 
@@ -867,6 +869,147 @@ def fig17_security(labels: bool = False) -> None:
     save(fig, "fig17_security", labels)
 
 
+# --------------------------------------------------------------------------- #
+# Figure 18 — the trigger at work on CIC-IDS2017 (overview + zoom on an onset)
+# --------------------------------------------------------------------------- #
+FAMILIES18 = [("DoS", BLUE[3]), ("Port Scan", BLUE[1]), ("Brute Force", BLUE[0]),
+              ("Web Attack", SLATE_LT), ("Bot", SLATE)]
+ZOOM18 = (430_000, 540_000)  # the DoS onset: the monitor fires before the attack starts
+
+
+def _windows(ax, fires, lane: float, color: str, w: int = 5_000, **kw) -> None:
+    """One lane of retraining windows as spans; a firing inside a window restarts it."""
+    spans: list[list[int]] = []
+    for f in sorted(fires):
+        if spans and f <= spans[-1][1]:
+            spans[-1][1] = f + w
+        else:
+            spans.append([f, f + w])
+    ax.broken_barh([(a, b - a) for a, b in spans], (lane - 0.35, 0.7), facecolors=color, **kw)
+
+
+def fig18_trigger_at_work() -> None:
+    """Attack share, monitor score, error rate and windows: whole stream and one onset."""
+    run = RUNS / "C_early" / "seed_0"
+    tr = pd.read_csv(run / "trace.csv.gz", usecols=["index", "y_raw", "correct"])
+    events = json.load(open(run / "drift_events.json"))["events"]
+    mon = [e["index"] for e in events if "recon" in e["source"]]
+    err = [e["index"] for e in events if e["source"] == "class"]
+    clock = [e["index"] for e in json.load(open(RUNS / "C_freq" / "seed_0" / "drift_events.json"))["events"]]
+    score = np.array(json.load(open(run / "lead_time.json"))["recon_error_series"])
+
+    fig = plt.figure(figsize=(FULL, 2.55))
+    gs = fig.add_gridspec(4, 2, width_ratios=[1.35, 1], height_ratios=[1, 1, 1, 0.75],
+                          hspace=0.18, wspace=0.27)
+    left = [fig.add_subplot(gs[0:3, 0]), fig.add_subplot(gs[3, 0])]
+    right = [fig.add_subplot(gs[i, 1]) for i in range(4)]
+
+    def shares(bin_size: int) -> pd.DataFrame:
+        b = (tr["index"] // bin_size) * bin_size
+        return pd.crosstab(b, tr["y_raw"], normalize="index")
+
+    def stack(ax, tab) -> None:
+        x = tab.index.to_numpy()
+        ys = [tab[f].to_numpy() if f in tab else np.zeros(len(x)) for f, _ in FAMILIES18]
+        ax.stackplot(x, ys, colors=[c for _, c in FAMILIES18], labels=[f for f, _ in FAMILIES18],
+                     linewidth=0)
+        ax.set_ylim(0, 1)
+        ax.set_yticks([0, 0.5, 1])
+
+    def lanes(ax, lo, hi) -> None:
+        _windows(ax, mon + err, 1, ACC)
+        _windows(ax, clock, 0, BLUE[0], edgecolor=BLUE[4], linewidth=0.3)
+        ax.set_ylim(-0.6, 1.6)
+        ax.set_yticks([1, 0], ["PACE", "Clock"])
+        ax.tick_params(axis="y", length=0)
+        ax.grid(False)
+        ax.set_xlim(lo, hi)
+
+    # (a) the whole evaluated stream
+    stack(left[0], shares(10_000))
+    left[0].axvspan(*ZOOM18, color=MUTED, alpha=0.18, lw=0)
+    left[0].set_ylabel("Attack share")
+    left[0].set_xlim(50_000, 2_050_000)
+    left[0].tick_params(labelbottom=False)
+    left[0].legend(loc="lower left", bbox_to_anchor=(0, 1.0), ncol=5, borderaxespad=0.2,
+                   handlelength=1.0, columnspacing=0.9)
+    tag(left[0], "a")
+    left[0].texts[-1].set_position((0.0, 1.14))
+    lanes(left[1], 50_000, 2_050_000)
+    left[1].xaxis.set_major_formatter(lambda v, _: f"{v / 1e6:.1f}M" if v else "0")
+    left[1].set_xlabel("Flow index")
+
+    # (b) zoom on the DoS onset
+    lo, hi = ZOOM18
+    stack(right[0], shares(1_000))
+    right[0].set_ylabel("Attack\nshare")
+    z = (score[:, 0] >= lo) & (score[:, 0] < hi)
+    right[1].plot(score[z, 0], score[z, 1], color=BLUE[2], lw=0.9)
+    fm = [f for f in mon if lo <= f < hi]
+    right[1].scatter(fm, np.interp(fm, score[:, 0], score[:, 1]), marker="v", s=16, color=ACC,
+                     edgecolor="white", linewidth=0.4, zorder=3)
+    right[1].set_ylabel("Monitor\nscore")
+    b = (tr["index"] // 1_000) * 1_000
+    rate = 1 - tr.groupby(b)["correct"].mean()
+    rz = rate[(rate.index >= lo) & (rate.index < hi)]
+    right[2].plot(rz.index, rz.to_numpy(), color=BLUE[2], lw=0.9)
+    fe = [f for f in err if lo <= f < hi]
+    right[2].scatter(fe, np.interp(fe, rz.index, rz.to_numpy()), marker="v", s=16, color=ACC,
+                     edgecolor="white", linewidth=0.4, zorder=3)
+    right[2].set_ylabel("Error\nrate")
+    for ax in right[:3]:
+        ax.set_xlim(lo, hi)
+        ax.tick_params(labelbottom=False)
+        ax.yaxis.set_label_coords(-0.11, 0.5)
+    tag(right[0], "b")
+    lanes(right[3], lo, hi)
+    right[3].xaxis.set_major_formatter(lambda v, _: f"{v / 1e3:.0f}K")
+    right[3].set_xlabel("Flow index")
+    save(fig, "fig18_trigger_at_work")
+
+
+# --------------------------------------------------------------------------- #
+# Figure 19 — the two headline contrasts in every cell
+# --------------------------------------------------------------------------- #
+def fig19_contrasts() -> None:
+    """Timing (PACE - blind clock) and monitor (PACE - live error test), paired 95% CIs."""
+    from scipy import stats
+    from tier1_analysis import paired_ci
+
+    fig, axes = plt.subplots(1, 2, figsize=(COL, 2.45), sharey=True)
+    comps = [("a", r"PACE $-$ clock", lambda p: (p[2], p[1])),
+             ("b", r"PACE $-$ error test", lambda p: (p[2], p[3]))]
+    for ax, (letter, xlabel, pick) in zip(axes, comps, strict=True):
+        means = []
+        for i, (ds, learner) in enumerate(CELLS13):
+            phases = _phases13(learner) + [("B_pht" if learner == "HAT" else f"{learner}_pht")]
+            seeds = _shared_seeds(ds, *phases)
+            a, b = pick(phases)
+            d = _per_seed_local_f1(ds, a, seeds) - _per_seed_local_f1(ds, b, seeds)
+            lo, hi = paired_ci(d)
+            means.append(d.mean())
+            y = i + (i // 3) * 0.5
+            ax.plot([lo, hi], [y, y], color=ACC, lw=0.9)
+            ax.scatter(d.mean(), y, s=16, zorder=3, color=ACC if lo > 0 or hi < 0 else "white",
+                       edgecolor=ACC, linewidth=0.8)
+        m = np.array(means)
+        half = stats.t.ppf(0.975, len(m) - 1) * m.std(ddof=1) / np.sqrt(len(m))
+        y = len(CELLS13) + 1.5
+        ax.plot([m.mean() - half, m.mean() + half], [y, y], color=BLUE[4], lw=1.4)
+        ax.scatter(m.mean(), y, marker="D", s=20, zorder=3,
+                   color=BLUE[4] if abs(m.mean()) > half else "white", edgecolor=BLUE[4], linewidth=0.8)
+        ax.axvline(0, color=MUTED, lw=0.7, ls="--")
+        ax.grid(axis="y", visible=False)
+        ax.grid(axis="x")
+        ax.set_xlabel(xlabel)
+        tag(ax, letter)
+    ticks = [i + (i // 3) * 0.5 for i in range(len(CELLS13))] + [len(CELLS13) + 1.5]
+    axes[0].set_yticks(ticks, [f"{DSET[ds]} {learner}" for ds, learner in CELLS13] + ["Aggregate"])
+    axes[0].invert_yaxis()
+    axes[1].tick_params(axis="y", length=0)
+    save(fig, "fig19_contrasts")
+
+
 def main() -> None:
     summ = load_summaries()
     for labels in (False, True):
@@ -881,6 +1024,8 @@ def main() -> None:
         fig15_closed_loop_stability(labels)
         fig16_label_delay(labels)
         fig17_security(labels)
+    fig18_trigger_at_work()
+    fig19_contrasts()
     fig1_delta()
     fig12_forest()
     fig13_forest()
