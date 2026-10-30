@@ -334,7 +334,7 @@ def _mean_n_drifts(dataset: str, phase: str,
 # Figure 1 — local F1 across the stream
 # --------------------------------------------------------------------------- #
 def fig1_trajectory(labels: bool = False) -> None:
-    fig, ax = plt.subplots(figsize=(FULL, 2.3))
+    fig, ax = plt.subplots(figsize=(FULL, 1.85))
     ax.axvspan(1.0e6, 2.05e6, color=PALE, lw=0, zorder=0)
     for phase in ["B", "C_freq", "C_early"]:
         idx, mean, std = load_trajectory(phase)
@@ -346,7 +346,7 @@ def fig1_trajectory(labels: bool = False) -> None:
             good = np.isfinite(mean)
             ax.annotate(f"{mean[good][-1]:.2f}", (idx[good][-1], mean[good][-1]),
                         xytext=(4, 0), textcoords="offset points", va="center", fontsize=6.5)
-    ax.set_xlabel("Stream position (samples)")
+    ax.set_xlabel("Flow index")
     ax.set_ylabel("Local F1")
     ax.set_ylim(0, 1.02)
     ax.set_xlim(0, 2.05e6)
