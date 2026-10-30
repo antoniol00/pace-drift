@@ -9,6 +9,8 @@
   fig12  trigger x base learner x dataset
   fig13  reactive / blind clock / PACE at matched fire count
   fig15  closed-loop stability, per-seed cumulative accuracy
+  fig16  timing (PACE - label-matched clock) under label delay
+  fig17  security arms without / with window rebalancing, per-seed cumulative accuracy
 (fig4 resources and fig5 sensitivity live in scripts/reviewer_analysis.py,
 fig7 in scripts/monitor_ablation.py; all three reuse the style defined here.)
 
@@ -785,6 +787,86 @@ def fig15_counts() -> None:
     plt.close(fig)
 
 
+# --------------------------------------------------------------------------- #
+# Figure 16 — timing under label delay
+# --------------------------------------------------------------------------- #
+DELAYS16 = [("", "0"), ("_d1k", "1"), ("_d5k", "5"), ("_d50k", "45")]  # suffix, minutes
+CELLS16 = [("cicids2017", "HAT", "C_early", "C_freq_lab"), ("cicids2017", "ARF", "ARF_early", "ARF_freq_lab"),
+           ("cicids2018", "HAT", "C_early", "C_freq_lab"), ("cicids2018", "ARF", "ARF_early", "ARF_freq_lab")]
+
+
+def fig16_label_delay(labels: bool = False) -> None:
+    """PACE minus the label-matched blind clock, per delay, with paired 95% CIs."""
+    from tier1_analysis import cell_seeds, paired_ci, per_seed_local_f1
+
+    fig, ax = plt.subplots(figsize=(COL, 2.0))
+    style = {"HAT": ("o", "-"), "ARF": ("s", "--")}
+    shade = {"cicids2017": BLUE[1], "cicids2018": BLUE[4]}
+    for k, (ds, learner, early, clock) in enumerate(CELLS16):
+        xs, ms, los, his = [], [], [], []
+        for i, (suffix, _) in enumerate(DELAYS16):
+            seeds = cell_seeds(ds, early + suffix, clock + suffix)
+            a, b = per_seed_local_f1(ds, early + suffix, seeds), per_seed_local_f1(ds, clock + suffix, seeds)
+            if a is None or b is None:
+                continue
+            d = a - b
+            lo, hi = paired_ci(d)
+            xs.append(i + (k - 1.5) * 0.09)
+            ms.append(d.mean())
+            los.append(lo)
+            his.append(hi)
+        mk, ls = style[learner]
+        col = shade[ds]
+        ax.vlines(xs, los, his, color=col, lw=0.9)
+        ax.plot(xs, ms, ls=ls, marker=mk, color=col, lw=0.9, ms=3.5, mec="white", mew=0.4,
+                label=f"{DSET[ds]} {learner}")
+        if labels:
+            for x, m in zip(xs, ms, strict=True):
+                ax.annotate(f"{m:+.3f}", (x, m), xytext=(3, 0), textcoords="offset points",
+                            fontsize=5.5, va="center")
+    ax.axhline(0, color=MUTED, lw=0.7, ls=":")
+    ax.set_xticks(range(len(DELAYS16)), [m for _, m in DELAYS16])
+    ax.set_xlabel("Label delay (minutes of capture)")
+    ax.set_ylabel(r"$\Delta$ local F1, PACE $-$ clock")
+    ax.legend(loc="lower left", ncol=2, bbox_to_anchor=(0, 1.0), borderaxespad=0.2,
+              handlelength=2.0, columnspacing=1.0)
+    save(fig, "fig16_label_delay", labels)
+
+
+# --------------------------------------------------------------------------- #
+# Figure 17 — adversaries and window rebalancing
+# --------------------------------------------------------------------------- #
+SECURITY17 = [("C_early", "PACE"), ("C_early_adv", "Oracle,\nattack"), ("C_early_advb", "Oracle,\nbenign"),
+              ("C_early_chaff", "PACE,\nchaff"), ("B_pht", "Error\ntest"), ("B_pht_chaff", "Error t.,\nchaff"),
+              ("C_freq", "Blind\nclock")]
+
+
+def fig17_security(labels: bool = False) -> None:
+    """Per-seed cumulative accuracy of each security arm, without and with rebalancing."""
+    def accs(phase: str) -> np.ndarray:
+        return np.array([json.load(open(RUNS / phase / f"seed_{s}" / "summary.json"))["final_acc"]
+                         for s in range(20) if (RUNS / phase / f"seed_{s}" / "summary.json").exists()])
+
+    fig, ax = plt.subplots(figsize=(COL, 2.3))
+    ax.axhspan(0.0, 0.90, color=PALE, lw=0, zorder=0)
+    ax.axhline(0.90, color=BLUE[3], lw=0.7, ls="--", zorder=1)
+    rng = np.random.default_rng(0)
+    for i, (phase, _) in enumerate(SECURITY17):
+        for dx, ph, kw, lbl in ((-0.19, phase, {"color": BLUE[0], "edgecolor": BLUE[4]}, "Undefended"),
+                                (0.19, phase + "_rb", {"color": ACC, "edgecolor": BLUE[4]}, "Window rebalancing")):
+            a = accs(ph)
+            ax.scatter(i + dx + rng.uniform(-0.09, 0.09, size=len(a)), a, s=8, linewidth=0.4, zorder=3,
+                       label=lbl if i == 0 else None, **kw)
+            if labels:
+                ax.annotate(f"{int((a < 0.90).sum())}", (i + dx, 1.005), ha="center", va="bottom", fontsize=5.5)
+    ax.set_xticks(range(len(SECURITY17)), [lbl for _, lbl in SECURITY17])
+    ax.set_ylabel("Cumulative accuracy (per seed)")
+    ax.set_ylim(0.35, 1.04 if labels else 1.01)
+    ax.set_xlim(-0.6, len(SECURITY17) - 0.4)
+    ax.legend(loc="lower left", ncol=2, bbox_to_anchor=(0, 1.0), borderaxespad=0.2)
+    save(fig, "fig17_security", labels)
+
+
 def main() -> None:
     summ = load_summaries()
     for labels in (False, True):
@@ -797,6 +879,8 @@ def main() -> None:
         fig12_external_validity(labels)
         fig13_timing_vs_frequency(labels)
         fig15_closed_loop_stability(labels)
+        fig16_label_delay(labels)
+        fig17_security(labels)
     fig1_delta()
     fig12_forest()
     fig13_forest()

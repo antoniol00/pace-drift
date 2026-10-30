@@ -254,8 +254,8 @@ Makefile                  # setup / test / lint / smoke / schedule / run-* / rep
 
 ```bibtex
 @misc{pacedrift2026,
-  title  = {When to Retrain a Network Intrusion Detector: Budget-Matched
-            Evidence on Timing, Triggers and Closed-Loop Collapse},
+  title  = {Retraining Timing and Adversarial Steering in Streaming Network
+            Intrusion Detection: A Budget-Matched Evaluation},
   author = {Lara Guti\'errez, Antonio},
   year   = {2026},
   note   = {https://github.com/antoniol00/pace-drift}
