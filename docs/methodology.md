@@ -55,7 +55,7 @@ Definitions over rolling-F1 snapshots taken every `snap_interval` samples (windo
 ## 6. Label delay and the linear learner
 
 - **Label delay** (`label_delay`, in flows): `experiments/runner.py` queues each flow as `[x, y, error, selected]`; it leaves the queue `label_delay` flows after it arrived, and only then does the error test (live PHT, or PACE's class PHT) count its error and, if a window selected it on arrival, the learner learn it (with any rebalancing replays). Windows still select the flows arriving after a firing, so the label budget is unchanged. The monitor and the blind clock need no label. With 0 every run is identical to before.
-- **Label-matched clock** (`*_freq_lab*`): under delay PACE's firings cluster and restart windows, so a count-matched clock (never overlapping) learns from far more of the stream (61–99.8% vs 34–41%). Its interval is `train_window / share`, the share being the matching `*_early` arm's mean labelled share over its ten seeds, pinned per dataset (anchor in the phase YAML, others under `by_phase`).
+- **Label-matched clock** (`*_freq_lab*`): under delay PACE's firings cluster and restart windows, so a count-matched clock (never overlapping) learns from far more of the stream (58–99.8% vs 30–41%). Its interval is `train_window / share`, the share being the matching `*_early` arm's mean labelled share over its ten seeds, pinned per dataset (anchor in the phase YAML, others under `by_phase`).
 - **Linear learner** (`LR_*`, `models/streaming.py`): river `StandardScaler | SoftmaxRegression` (defaults). Deterministic given the stream, so its seeds vary only the monitor's initialisation and the chaff draw.
 
 ## 7. Cost accounting

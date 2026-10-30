@@ -24,8 +24,9 @@ whichever drift detector is bolted onto a streaming classifier.
 > every collapse (0/140) and lifted local F1 by +0.13 to +0.24. Do not claim
 > problem-space realisability of the chaff, or robustness to an adversary who
 > adapts to the defence. **Label delay** ([11](../experiments/11-delay-and-linear.md))
-> bounds the timing claim: with labels 5 minutes late the advantage over a
-> label-matched blind clock disappears, at 45 minutes the clock wins 3/4 cells;
+> bounds the timing claim: with labels a minute late the advantage over a
+> label-matched blind clock shrinks (resolved only on the ensembles), 5 minutes
+> late it disappears, at 45 minutes the clock wins 3/4 cells;
 > the monitor helps under delay only by labelling more. Never claim timing helps
 > without saying "while labels are fresh". An online logistic regression never
 > collapsed (0/120): collapse is a property of the single tree among the four
@@ -106,7 +107,7 @@ resolved**. It is significant only on the UNSW ensembles, where it adds firings
 and a blind clock at the same count does as well. The anticipation is real (the
 monitor fires first), but under immediate labels it does not translate into
 measurably better adaptation; and with delayed labels, where it should help
-most, it does not either — it beats the error test only on ARF at 45 minutes,
+most, it does not either — it beats the error test by more than 0.002 only on ARF at 45 minutes,
 by labelling more, and a blind clock with those labels does better
 ([11](../experiments/11-delay-and-linear.md)).
 

@@ -1,0 +1,8 @@
+phase: B_pht_d1k
+# B_pht with labels delayed by 1,000 flows (about 1 minute of capture at the
+# ~1,100 flows per minute of either window): the error tests and the learner wait for labels,
+# the monitor does not. See docs/experiments/11-delay-and-linear.md.
+label_delay: 1000
+# Live reactive control for HAT. B replays the schedule recorded from HAT at
+# seed 0, so at every other seed it adapts on another run's error. This arm runs
+# the same error Page-Hinkley live on its own predictions; see phase_arf_pht.yaml.

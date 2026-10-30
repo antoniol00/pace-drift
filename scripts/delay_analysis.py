@@ -1,9 +1,9 @@
 """Label delay — do the timing and monitor contrasts change when labels are late?
 
 Every real-data cell assumes labels arrive with the flow, which favours the
-live error test: only it depends on labels for its timeliness. The ``*_d5k`` /
-``*_d50k`` arms hold each label 5,000 / 50,000 flows (about 5 / 45 minutes of
-capture) before the error tests count it and the learner is fed it; the monitor
+live error test: only it depends on labels for its timeliness. The ``*_d1k`` /
+``*_d5k`` / ``*_d50k`` arms hold each label 1,000 / 5,000 / 50,000 flows (about
+1 / 5 / 45 minutes of capture) before the error tests count it and the learner is fed it; the monitor
 still sees each flow at once. For HAT and ARF on CIC-IDS2017 and CIC-IDS2018,
 paired by seed over the ten core seeds:
 
@@ -39,7 +39,7 @@ from tier1_analysis import (
 )
 
 OUT = Path("results/report/delay")
-DELAYS = (("", "0"), ("_d5k", "5,000"), ("_d50k", "50,000"))
+DELAYS = (("", "0"), ("_d1k", "1,000"), ("_d5k", "5,000"), ("_d50k", "50,000"))
 LEARNERS = (("HAT", "C_early", "C_freq", "B_pht", "C_freq_lab"),
             ("ARF", "ARF_early", "ARF_freq", "ARF_pht", "ARF_freq_lab"))
 

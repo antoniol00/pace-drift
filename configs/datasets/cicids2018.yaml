@@ -36,8 +36,13 @@ by_phase:
   SRP_freq:
     periodic_adapt_interval: 11505
   # Label-delay controls (docs/experiments/11): matched to the delayed *_early arm
-  # over ten seeds — C_early_d5k 360.8, C_early_d50k 382.4, ARF_early_d5k 383.5,
-  # ARF_early_d50k 444.9 fires; 2.95M / interval gives 360, 382, 383, 444.
+  # over ten seeds — C_early_d1k 342.7, C_early_d5k 360.8, C_early_d50k 382.4,
+  # ARF_early_d1k 344.3, ARF_early_d5k 383.5, ARF_early_d50k 444.9 fires;
+  # 2.95M / interval gives 343, 360, 382, 344, 383, 444.
+  C_freq_d1k:
+    periodic_adapt_interval: 8608
+  ARF_freq_d1k:
+    periodic_adapt_interval: 8568
   C_freq_d5k:
     periodic_adapt_interval: 8176
   C_freq_d50k:
@@ -47,8 +52,12 @@ by_phase:
   ARF_freq_d50k:
     periodic_adapt_interval: 6631
   # Label-matched clocks (docs/experiments/11): train_window / labelled share of the
-  # matching *_early arm over ten seeds (C_early 0.3292, _d5k 0.3560, _d50k 0.3835;
-  # ARF_early 0.3231, _d5k 0.3565, _d50k 0.4047).
+  # matching *_early arm over ten seeds (C_early 0.3292, _d1k 0.3386, _d5k 0.3560,
+  # _d50k 0.3835; ARF_early 0.3231, _d1k 0.3315, _d5k 0.3565, _d50k 0.4047).
+  C_freq_lab_d1k:
+    periodic_adapt_interval: 14766
+  ARF_freq_lab_d1k:
+    periodic_adapt_interval: 15081
   C_freq_lab:
     periodic_adapt_interval: 15187
   C_freq_lab_d5k:

@@ -28,7 +28,7 @@ drift-dense regions where strategies actually diverge.
 | 8 | [Controlled stream](08-synthetic-timing.md) | Does the core claim hold where drift is known by construction? | Timing **+0.254 / +0.288** (PCA / AE, 10 seeds) at an exactly matched budget; the monitor adds only ~+0.02 over the live error test |
 | 9 | [Third review round](09-review-round-3.md) | Do the claims survive clustered intervals, 20 seeds, a metric that sees benign windows, a converged D3 and stability controls? | Timing aggregate **[−0.003, +0.084]** under a hierarchical bootstrap (per-cell evidence carries it); HAT anchor vs schedule **+0.000** at 20 seeds; collapse hits **every stream-responsive trigger on HAT, incl. the live error test (8/20)**, needs feedback, and spares the ensembles |
 | 10 | [Security evaluation](10-security.md) | Can an adversary steer retraining into collapse, and does a defence stop it? | **Chaff (1.6% of traffic, clean labels) collapses PACE 14/20 and the live error test 15/20** (vs 4 and 8); an attack-free-window oracle blinds the detector; **window rebalancing: 0/140 collapses**, local F1 +0.13 to +0.24 |
-| 11 | [Label delay and a linear learner](11-delay-and-linear.md) | Does timing survive late labels? Does collapse need the tree? | **Timing needs fresh labels: 5 min of delay erase it, at 45 min a label-matched blind clock wins 3/4 cells; the monitor helps under delay only by labelling more. A logistic regression never collapses (0/120)** |
+| 11 | [Label delay and a linear learner](11-delay-and-linear.md) | Does timing survive late labels? Does collapse need the tree? | **Timing needs fresh labels: 1 min of delay shrinks it, 5 min erase it, at 45 min a label-matched blind clock wins 3/4 cells; the monitor helps under delay only by labelling more. A logistic regression never collapses (0/120)** |
 
 ## The argument in one paragraph
 
@@ -47,8 +47,8 @@ judge a trigger by **what it does to the adaptation loop**, not by how well it
 detects — and, measured that way, this kind of loop is **fragile** for every
 trigger we tested on the single tree, ours included (experiment 7) — an
 adversary can induce it and window rebalancing removes it (experiment 10). Two
-conditions bound all of this (experiment 11): with labels returned 5 minutes
-late the timing advantage disappears, and at 45 minutes a blind clock with the
+conditions bound all of this (experiment 11): with labels returned a minute
+late the timing advantage shrinks, at 5 minutes it disappears, and at 45 minutes a blind clock with the
 same labels wins; and neither ensembles nor a linear model collapse.
 
 ## Reproducing
